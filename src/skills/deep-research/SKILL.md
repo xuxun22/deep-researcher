@@ -30,17 +30,20 @@ description: "执行完整的深度研究流程。Use when 用户提交一个研
 
 ## 可用工具
 
-- `tavily_search` — 网页搜索（必须首先使用）
-- `tavily_extract` — 内容提取
-- `domain_score` — 域名权威性评分
-- `batch_domain_score` — 批量评分
+**只使用以下 MCP 工具，不要使用其他工具：**
+- `mcp__tavily__tavily_search` — 网页搜索（必须首先使用）
+- `mcp__tavily__tavily_extract` — 内容提取
+- `mcp__domain__domain_score` — 域名权威性评分
+- `mcp__domain__batch_domain_score` — 批量评分
 
 ## 关键规则
 
-1. **必须搜索实时信息** — 不要仅依赖训练数据
-2. **必须评估来源** — 每个来源都要打分
-3. **只使用可信来源** — domain_score < 0.5 的排除
-4. **返回 JSON** — 最终结果必须是严格的 JSON
+1. **只使用 Tavily MCP 工具搜索** — 不要调用 WebSearch, WebFetch, Bash 等内置工具
+2. **搜索不超过 2 个关键词** — 控制时间
+3. **提取不超过 3 个来源** — 控制时间
+4. **必须评估来源** — 每个来源都要打分
+5. **只使用可信来源** — domain_score < 0.5 的排除
+6. **返回 JSON** — 最终结果必须是严格的 JSON
 
 ## 输出格式
 

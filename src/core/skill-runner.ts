@@ -90,11 +90,11 @@ async function main() {
     options: {
       model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
       mcpServers,
-      maxTurns: maxTurns || 15,
+      maxTurns: maxTurns || 10,
       persistSession: false,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
-      disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task'],
+      disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task', 'Bash', 'WebFetch', 'WebSearch'],
     },
   });
 
