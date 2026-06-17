@@ -145,12 +145,12 @@ async function main() {
     },
   });
 
-  let structuredOutput = null;
-
   for await (const msg of q) {
     if (msg.type === 'result' && msg.subtype === 'success') {
       result = msg.result;
-      structuredOutput = msg.structured_output || null;
+      if (msg.structured_output) {
+        result = JSON.stringify(msg.structured_output);
+      }
       console.log(JSON.stringify({ type: 'result', result: msg.result }));
     } else if (msg.type === 'tool_use_summary') {
       console.log(JSON.stringify({ type: 'tool_use_summary', summary: msg.summary }));
@@ -162,15 +162,14 @@ async function main() {
       }
       for (const tu of toolUses) {
         console.log(JSON.stringify({ type: 'tool_call', name: tu.name, input: tu.input }));
+        // Capture structured output from the tool call
+        if (tu.name === 'StructuredOutput' && tu.input) {
+          result = JSON.stringify(tu.input);
+        }
       }
     } else if (msg.type === 'error') {
       console.log(JSON.stringify({ type: 'error', message: msg.message || String(msg) }));
     }
-  }
-
-  // If we got structured output from outputFormat, use that as the final result
-  if (structuredOutput && typeof structuredOutput === 'object') {
-    result = JSON.stringify(structuredOutput);
   }
 }
 
