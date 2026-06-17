@@ -154,7 +154,11 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
       })
     }
 
-    await updateSessionStatus(session.id, 'done', { completed_at: new Date().toISOString() })
+    await updateSessionStatus(session.id, 'done', {
+      intent: parsedResult.queryAnalysis?.intent ?? undefined,
+      keywords: parsedResult.queryAnalysis?.keywords ?? undefined,
+      completed_at: new Date().toISOString(),
+    })
     yield { type: 'phase', data: { phase: 'complete' } }
     yield { type: 'result', data: { summary: result, translation: parsedResult.translation?.translated ?? result } }
 
