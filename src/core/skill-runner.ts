@@ -94,7 +94,7 @@ async function main() {
       persistSession: false,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
-      disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task', 'Bash', 'WebFetch', 'WebSearch'],
+      disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task', 'Bash', 'WebFetch', 'WebSearch', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'LS'],
       outputFormat: {
         type: 'json_schema',
         schema: {
