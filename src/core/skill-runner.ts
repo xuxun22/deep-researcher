@@ -144,7 +144,8 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
     tools: toolConfigs,
   }
 
-  const scriptPath = `/tmp/skill-runner-${ctx.sessionId ?? Date.now()}.js`
+  const scriptName = `skill-runner-${ctx.sessionId ?? Date.now()}.js`
+  const scriptPath = `/vercel/sandbox/${scriptName}`
 
   await sandbox.writeFiles([
     { path: scriptPath, content: RUNNER_SCRIPT },
@@ -154,7 +155,8 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
 
   const cmd = await sandbox.runCommand({
     cmd: 'node',
-    args: [scriptPath],
+    args: [scriptName],
+    cwd: '/vercel/sandbox',
     detached: true,
     env: {
       ...Object.fromEntries(
