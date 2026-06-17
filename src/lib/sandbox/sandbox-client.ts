@@ -3,9 +3,26 @@ import { config } from '@/lib/config/env';
 
 let sandboxPromise: Promise<Sandbox> | null = null;
 
+async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
+  try {
+    await sandbox.runCommand('node', ['-e', "require('@anthropic-ai/claude-agent-sdk')"], {
+      timeoutMs: 5000,
+    })
+  } catch {
+    await sandbox.runCommand('npm', ['init', '-y'], { timeoutMs: 30000 })
+    await sandbox.runCommand(
+      'npm',
+      ['install', '@anthropic-ai/claude-agent-sdk', 'zod'],
+      { timeoutMs: 120000 }
+    )
+  }
+}
+
 export async function getResearchSandbox(): Promise<Sandbox> {
   if (sandboxPromise) {
-    return sandboxPromise;
+    const sbx = await sandboxPromise
+    await ensureSandboxDeps(sbx)
+    return sbx
   }
 
   sandboxPromise = Sandbox.getOrCreate({
@@ -26,18 +43,20 @@ export async function getResearchSandbox(): Promise<Sandbox> {
       CLAUDE_AGENT_SDK_CLIENT_APP: 'deep-researcher/0.1.0',
     },
     onCreate: async (sbx) => {
-      await sbx.runCommand('npm', ['init', '-y']);
+      await sbx.runCommand('npm', ['init', '-y'])
       await sbx.runCommand('npm', [
         'install',
         '@anthropic-ai/claude-agent-sdk',
         'zod',
-      ]);
+      ])
     },
-  });
+  })
 
-  return sandboxPromise;
+  const sbx = await sandboxPromise
+  await ensureSandboxDeps(sbx)
+  return sbx
 }
 
 export async function resetSandbox(): Promise<void> {
-  sandboxPromise = null;
+  sandboxPromise = null
 }
