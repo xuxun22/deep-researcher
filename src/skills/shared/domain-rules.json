@@ -1,0 +1,9 @@
+{
+  "academic": { "baseScore": 0.95, "label": "学术机构" },
+  "government": { "baseScore": 0.95, "label": "政府机构" },
+  "major_media": { "baseScore": 0.85, "label": "主流媒体" },
+  "tech": { "baseScore": 0.75, "label": "技术平台" },
+  "encyclopedia": { "baseScore": 0.75, "label": "百科全书" },
+  "social": { "baseScore": 0.40, "label": "社交媒体" },
+  "unknown": { "baseScore": 0.50, "label": "未知来源" }
+}
