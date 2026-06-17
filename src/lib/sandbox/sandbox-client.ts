@@ -1,13 +1,13 @@
-import { Sandbox } from '@vercel/sandbox';
-import { config } from '@/lib/config/env';
-
-let sandboxPromise: Promise<Sandbox> | null = null;
+import { Sandbox } from '@vercel/sandbox'
+import { config } from '@/lib/config/env'
 
 async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
   try {
-    await sandbox.runCommand('node', ['-e', "require('@anthropic-ai/claude-agent-sdk')"], {
-      timeoutMs: 5000,
-    })
+    await sandbox.runCommand(
+      'node',
+      ['-e', "require('@anthropic-ai/claude-agent-sdk')"],
+      { timeoutMs: 5000 }
+    )
   } catch {
     await sandbox.runCommand('npm', ['init', '-y'], { timeoutMs: 30000 })
     await sandbox.runCommand(
@@ -19,13 +19,9 @@ async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
 }
 
 export async function getResearchSandbox(): Promise<Sandbox> {
-  if (sandboxPromise) {
-    const sbx = await sandboxPromise
-    await ensureSandboxDeps(sbx)
-    return sbx
-  }
-
-  sandboxPromise = Sandbox.getOrCreate({
+  // Always get a fresh sandbox reference so the SDK can resume the session
+  // if it was stopped between requests.
+  const sbx = await Sandbox.getOrCreate({
     name: 'deep-researcher-agent',
     persistent: true,
     timeout: 300_000, // 5 minutes
@@ -52,11 +48,10 @@ export async function getResearchSandbox(): Promise<Sandbox> {
     },
   })
 
-  const sbx = await sandboxPromise
   await ensureSandboxDeps(sbx)
   return sbx
 }
 
 export async function resetSandbox(): Promise<void> {
-  sandboxPromise = null
+  // no-op — we intentionally do not cache the sandbox reference
 }
