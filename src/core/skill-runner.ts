@@ -145,11 +145,13 @@ async function main() {
     },
   });
 
+  let capturedJson = '';
+
   for await (const msg of q) {
     if (msg.type === 'result' && msg.subtype === 'success') {
       result = msg.result;
       if (msg.structured_output) {
-        result = JSON.stringify(msg.structured_output);
+        capturedJson = JSON.stringify(msg.structured_output);
       }
       console.log(JSON.stringify({ type: 'result', result: msg.result }));
     } else if (msg.type === 'tool_use_summary') {
@@ -162,14 +164,17 @@ async function main() {
       }
       for (const tu of toolUses) {
         console.log(JSON.stringify({ type: 'tool_call', name: tu.name, input: tu.input }));
-        // Capture structured output from the tool call
-        if (tu.name === 'StructuredOutput' && tu.input) {
-          result = JSON.stringify(tu.input);
+        if (tu.name === 'StructuredOutput' && tu.input && Object.keys(tu.input).length > 0) {
+          capturedJson = JSON.stringify(tu.input);
         }
       }
     } else if (msg.type === 'error') {
       console.log(JSON.stringify({ type: 'error', message: msg.message || String(msg) }));
     }
+  }
+
+  if (capturedJson) {
+    result = capturedJson;
   }
 }
 
