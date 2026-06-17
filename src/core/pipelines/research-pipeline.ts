@@ -95,13 +95,25 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
       }
     }
 
-    // Deduplicate by URL
+    // Deduplicate by URL and pre-rank by domain score
     const seen = new Set<string>()
-    const uniqueResults = allResults.filter(r => {
-      if (seen.has(r.url)) return false
-      seen.add(r.url)
-      return true
-    })
+    const uniqueResults = allResults
+      .filter(r => {
+        if (seen.has(r.url)) return false
+        seen.add(r.url)
+        return true
+      })
+      .map(r => {
+        const domain = new URL(r.url).hostname
+        let domainScore = 0.5
+        if (domain.endsWith('.edu') || domain.endsWith('.gov')) domainScore = 0.95
+        else if (domain.endsWith('.org')) domainScore = 0.75
+        else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) domainScore = 0.9
+        else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) domainScore = 0.4
+        return { ...r, domain, domainScore }
+      })
+      .sort((a, b) => b.domainScore - a.domainScore)
+      .slice(0, 12) // limit to top 12 sources for agent
 
     // AI Skill: evaluate authority of sources
     const authorityResult = yield* collectSkillResult(
