@@ -54,11 +54,17 @@ interface TrendAnalysis {
   created_at: string
 }
 
+interface ModelInfo {
+  id: string
+  name: string
+  provider: string
+}
+
 export default function Home() {
   const [userId, setUserId] = useState("")
   const [query, setQuery] = useState("")
   const [model, setModel] = useState("")
-  const [availableModels, setAvailableModels] = useState<string[]>([])
+  const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([])
   const [finalResult, setFinalResult] = useState<{ summary: string; translation: string; sources: Source[] } | null>(null)
@@ -89,7 +95,7 @@ export default function Home() {
       .then((d) => {
         if (d.models && Array.isArray(d.models)) {
           setAvailableModels(d.models)
-          if (d.models.length > 0) setModel(d.models[0])
+          if (d.models.length > 0) setModel(d.models[0].id)
         }
       })
       .catch(() => {})
@@ -322,7 +328,7 @@ export default function Home() {
                 <select value={model} onChange={(e) => setModel(e.target.value)}
                   className="text-sm px-3 py-3 rounded-xl border border-stone-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-stone-400"
                   disabled={isStreaming}>
-                  {availableModels.map((m) => <option key={m} value={m}>{m}</option>)}
+                  {availableModels.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                   {availableModels.length === 0 && <option value="">default</option>}
                 </select>
                 <button type="submit" disabled={isStreaming || !query.trim()}
