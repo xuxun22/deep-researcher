@@ -1,7 +1,5 @@
 import { Sandbox } from '@vercel/sandbox'
 import { config } from '@/lib/config/env'
-import { readFile, readdir } from 'fs/promises'
-import { join } from 'path'
 
 async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
   try {
@@ -17,30 +15,6 @@ async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
       ['install', '@anthropic-ai/claude-agent-sdk', 'zod'],
       { timeoutMs: 120000 }
     )
-  }
-}
-
-async function installSkills(sandbox: Sandbox): Promise<void> {
-  const skillsDir = join(process.cwd(), 'src', 'skills')
-  const skillNames = await readdir(skillsDir)
-  const files: Array<{ path: string; content: string }> = []
-
-  for (const name of skillNames) {
-    if (name === 'shared') continue
-    const skillPath = join(skillsDir, name, 'SKILL.md')
-    try {
-      const content = await readFile(skillPath, 'utf-8')
-      files.push({
-        path: `/vercel/sandbox/.claude/skills/${name}/SKILL.md`,
-        content,
-      })
-    } catch {
-      // skip skills without SKILL.md
-    }
-  }
-
-  if (files.length > 0) {
-    await sandbox.writeFiles(files)
   }
 }
 
@@ -69,7 +43,6 @@ export async function getResearchSandbox(): Promise<Sandbox> {
         '@anthropic-ai/claude-agent-sdk',
         'zod',
       ])
-      await installSkills(sbx)
     },
   })
 

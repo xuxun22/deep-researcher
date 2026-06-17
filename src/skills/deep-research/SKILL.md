@@ -9,13 +9,13 @@ description: "执行完整的深度研究流程。Use when 用户提交一个研
 
 ## 研究流程
 
-你必须严格按照以下步骤执行：
+**重要：你必须使用工具完成研究，不能仅依赖训练数据。**
 
 ### Phase 1: Query Understanding
 分析用户查询，生成搜索关键词（中英文）。
 
 ### Phase 2: Search & Authority Evaluation
-使用 `tavily_search` 工具搜索实时信息。对返回的每个来源：
+**立即使用 `tavily_search` 工具搜索实时信息。** 对返回的每个来源：
 - 使用 `domain_score` 评估域名权威性
 - 只保留 domain_score >= 0.5 的来源
 

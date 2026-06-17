@@ -89,18 +89,12 @@ async function main() {
     prompt: userInput,
     options: {
       model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
-      agent: 'main',
-      agents: {
-        main: {
-          description: 'Deep research agent',
-          prompt: systemPrompt,
-        },
-      },
       mcpServers,
       maxTurns: maxTurns || 15,
       persistSession: false,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
+      disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task'],
     },
   });
 
