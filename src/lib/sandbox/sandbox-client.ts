@@ -19,9 +19,11 @@ async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
 }
 
 export async function getResearchSandbox(): Promise<Sandbox> {
-  const sbx = await Sandbox.getOrCreate({
-    name: 'deep-researcher-agent',
-    persistent: true,
+  // Use a unique sandbox per request to avoid session conflicts
+  const name = `deep-researcher-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const sbx = await Sandbox.create({
+    name,
+    persistent: false,
     timeout: 300_000,
     resources: { vcpus: 2 },
     env: {
@@ -36,17 +38,15 @@ export async function getResearchSandbox(): Promise<Sandbox> {
       NODE_ENV: 'production',
       CLAUDE_AGENT_SDK_CLIENT_APP: 'deep-researcher/0.1.0',
     },
-    onCreate: async (sbx) => {
-      await sbx.runCommand('npm', ['init', '-y'])
-      await sbx.runCommand('npm', [
-        'install',
-        '@anthropic-ai/claude-agent-sdk',
-        'zod',
-      ])
-    },
   })
 
-  await ensureSandboxDeps(sbx)
+  await sbx.runCommand('npm', ['init', '-y'])
+  await sbx.runCommand('npm', [
+    'install',
+    '@anthropic-ai/claude-agent-sdk',
+    'zod',
+  ])
+
   return sbx
 }
 
