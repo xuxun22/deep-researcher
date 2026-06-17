@@ -95,6 +95,53 @@ async function main() {
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task', 'Bash', 'WebFetch', 'WebSearch'],
+      outputFormat: {
+        type: 'json_schema',
+        schema: {
+          type: 'object',
+          properties: {
+            queryAnalysis: {
+              type: 'object',
+              properties: {
+                intent: { type: 'string' },
+                language: { type: 'string' },
+                keywords: { type: 'array', items: { type: 'string' } },
+              },
+            },
+            sources: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  url: { type: 'string' },
+                  title: { type: 'string' },
+                  domain: { type: 'string' },
+                  domainScore: { type: 'number' },
+                  passed: { type: 'boolean' },
+                },
+                required: ['url', 'domain', 'domainScore', 'passed'],
+              },
+            },
+            summary: {
+              type: 'object',
+              properties: {
+                overview: { type: 'string' },
+                detailedAnalysis: { type: 'string' },
+                language: { type: 'string' },
+              },
+              required: ['overview', 'language'],
+            },
+            translation: {
+              type: 'object',
+              properties: {
+                translated: { type: 'string' },
+                originalLanguage: { type: 'string' },
+              },
+            },
+          },
+          required: ['queryAnalysis', 'sources', 'summary'],
+        },
+      },
     },
   });
 
