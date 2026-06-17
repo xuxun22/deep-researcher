@@ -100,15 +100,15 @@ Key rules:
 
 ## MCP Tools
 
-Custom MCP tools are defined in `src/core/mcp-tools/` using `@anthropic-ai/claude-agent-sdk`'s `tool()` + `createSdkMcpServer()`:
+MCP tools are defined inline within the Sandbox runner script (`src/core/skill-runner.ts`) using `@anthropic-ai/claude-agent-sdk`'s `tool()` + `createSdkMcpServer()`. They execute inside the Sandbox VM, giving the agent access to external APIs without leaving the isolated environment.
 
-- `tavily-search-tool.ts` — Exposes `tavily_search` and `tavily_extract` to agents.
-- `domain-score-tool.ts` — Exposes `domain_score` and `batch_domain_score`.
-- `history-query-tool.ts` — Exposes `query_history` for trend analysis.
+Current tools exposed to skills:
+- `tavily_search` / `tavily_extract` — Web search and content extraction via Tavily API.
+- `domain_score` / `batch_domain_score` — Simple heuristic-based domain authority scoring.
 
 When adding a new MCP tool:
-1. Create it in `src/core/mcp-tools/` using `tool()` + Zod schemas.
-2. Register it in `src/core/skill-runner.ts` `mcpServers` object.
+1. Add the `tool()` definition to the `RUNNER_SCRIPT` template in `src/core/skill-runner.ts`.
+2. Include the tool name in the `allowedTools` array.
 3. Reference the tool name in the relevant SKILL.md.
 
 ## Testing Instructions

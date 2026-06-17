@@ -1,122 +1,220 @@
-import type Anthropic from '@anthropic-ai/sdk';
-import { readdir, readFile, access } from 'fs/promises';
-import { join } from 'path';
-import type { SkillMeta, SkillContext, SkillEvent, SkillInput } from './skill-types';
-import { getAnthropicClient } from '@/lib/ai/client';
-import { createTools as createTavilyTools, executeTool as executeTavilyTool } from './tools/tavily-tools';
-import { createTools as createDomainTools, executeTool as executeDomainTool } from './tools/domain-tools';
+import type { SkillMeta, SkillContext, SkillEvent, SkillInput } from './skill-types'
+import { getResearchSandbox } from '@/lib/sandbox/sandbox-client'
 
 export interface RunSkillOptions {
-  skill: SkillMeta;
-  input: SkillInput;
-  ctx: SkillContext;
-  enabledTools?: ('tavily' | 'domain')[];
+  skill: SkillMeta
+  input: SkillInput
+  ctx: SkillContext
+  enabledTools?: ('tavily' | 'domain')[]
 }
+
+const RUNNER_SCRIPT = `const { query, createSdkMcpServer, tool } = require('@anthropic-ai/claude-agent-sdk');
+const { z } = require('zod');
+
+async function main() {
+  const config = JSON.parse(process.env.SKILL_CONFIG || '{}');
+  const { systemPrompt, userInput, model, maxTurns, tools: toolConfigs } = config;
+
+  const mcpServers = {};
+  const allowedTools = [];
+
+  if (toolConfigs.tavily) {
+    mcpServers.tavily = createSdkMcpServer({
+      name: 'tavily',
+      tools: [
+        tool('tavily_search', 'Search the web using Tavily API', {
+          query: z.string().describe('Search query'),
+          max_results: z.number().optional().describe('Maximum number of results'),
+        }, async (args) => {
+          const res = await fetch('https://api.tavily.com/search', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
+            },
+            body: JSON.stringify(args),
+          });
+          const data = await res.json();
+          return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+        }),
+        tool('tavily_extract', 'Extract content from URLs using Tavily API', {
+          urls: z.array(z.string()).describe('List of URLs to extract'),
+        }, async (args) => {
+          const res = await fetch('https://api.tavily.com/extract', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
+            },
+            body: JSON.stringify(args),
+          });
+          const data = await res.json();
+          return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+        }),
+      ],
+    });
+    allowedTools.push('tavily_search', 'tavily_extract');
+  }
+
+  if (toolConfigs.domain) {
+    mcpServers.domain = createSdkMcpServer({
+      name: 'domain',
+      tools: [
+        tool('domain_score', 'Evaluate domain authority score (0-1)', {
+          domain: z.string().describe('Domain name to score'),
+        }, async (args) => {
+          const { domain } = args;
+          let score = 0.5;
+          if (domain.endsWith('.edu') || domain.endsWith('.gov')) score = 0.95;
+          else if (domain.endsWith('.org')) score = 0.75;
+          else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) score = 0.9;
+          else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) score = 0.4;
+          return { content: [{ type: 'text', text: JSON.stringify({ domain, score }) }] };
+        }),
+        tool('batch_domain_score', 'Score multiple domains at once', {
+          domains: z.array(z.string()).describe('List of domain names'),
+        }, async (args) => {
+          const results = args.domains.map(domain => {
+            let score = 0.5;
+            if (domain.endsWith('.edu') || domain.endsWith('.gov')) score = 0.95;
+            else if (domain.endsWith('.org')) score = 0.75;
+            else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) score = 0.9;
+            else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) score = 0.4;
+            return { domain, score };
+          });
+          return { content: [{ type: 'text', text: JSON.stringify({ results }) }] };
+        }),
+      ],
+    });
+    allowedTools.push('domain_score', 'batch_domain_score');
+  }
+
+  const q = query({
+    prompt: userInput,
+    options: {
+      model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+      mcpServers,
+      tools: [],
+      allowedTools,
+      maxTurns: maxTurns || 10,
+      persistSession: false,
+      permissionMode: 'bypassPermissions',
+      allowDangerouslySkipPermissions: true,
+    },
+  });
+
+  for await (const msg of q) {
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      console.log(JSON.stringify({ type: 'result', result: msg.result }));
+    } else if (msg.type === 'tool_use_summary') {
+      console.log(JSON.stringify({ type: 'tool_use_summary', summary: msg.summary }));
+    } else if (msg.type === 'assistant') {
+      const text = msg.message?.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+      if (text) {
+        console.log(JSON.stringify({ type: 'assistant_text', text }));
+      }
+    } else if (msg.type === 'error') {
+      console.log(JSON.stringify({ type: 'error', message: msg.message || String(msg) }));
+    }
+  }
+}
+
+main().catch(err => {
+  console.error(JSON.stringify({ type: 'fatal_error', message: err.message }));
+  process.exit(1);
+});
+`
 
 export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEvent> {
-  const { skill, input, ctx, enabledTools } = options;
+  const { skill, input, ctx, enabledTools } = options
 
-  yield { type: 'skill_start', data: { skill: skill.name } };
+  yield { type: 'skill_start', data: { skill: skill.name } }
 
-  const tools = buildTools(ctx, enabledTools ?? ['tavily', 'domain']);
-  const systemPrompt = buildSystemPrompt(skill, ctx);
+  const sandbox = await getResearchSandbox()
 
-  const messages: Anthropic.MessageParam[] = [
-    { role: 'user', content: JSON.stringify(input) },
-  ];
+  const toolConfigs: Record<string, boolean> = {}
+  if (enabledTools?.includes('tavily')) toolConfigs.tavily = true
+  if (enabledTools?.includes('domain')) toolConfigs.domain = true
 
-  const client = getAnthropicClient();
-  const maxTurns = 10;
-  let result = '';
+  const configPayload = {
+    systemPrompt: buildSystemPrompt(skill, ctx),
+    userInput: JSON.stringify(input),
+    model: ctx.model,
+    maxTurns: 10,
+    tools: toolConfigs,
+  }
 
-  for (let turn = 0; turn < maxTurns; turn++) {
-    if (ctx.signal.aborted) break;
+  const scriptPath = `/tmp/skill-runner-${ctx.sessionId ?? Date.now()}.js`
 
-    yield { type: 'agent_turn', data: { turn: turn + 1 } };
+  await sandbox.writeFiles([
+    { path: scriptPath, content: RUNNER_SCRIPT },
+  ])
 
-    const response = await client.messages.create({
-      model: ctx.model,
-      max_tokens: 8192,
-      system: systemPrompt,
-      tools: tools.length > 0 ? tools : undefined,
-      messages,
-    });
+  yield { type: 'agent_turn', data: { turn: 1 } }
 
-    const textBlocks = response.content.filter(
-      (b): b is Anthropic.TextBlock => b.type === 'text'
-    );
-    const toolUseBlocks = response.content.filter(
-      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
-    );
+  const cmd = await sandbox.runCommand({
+    cmd: 'node',
+    args: [scriptPath],
+    detached: true,
+    env: {
+      ...Object.fromEntries(
+        Object.entries(process.env).filter(([, v]) => v !== undefined)
+      ) as Record<string, string>,
+      SKILL_CONFIG: JSON.stringify(configPayload),
+    },
+  })
 
-    if (textBlocks.length > 0) {
-      result = textBlocks.map(b => b.text).join('\n');
-      yield { type: 'agent_text', data: { text: result } };
+  let result = ''
+  let errorMessage = ''
+
+  for await (const log of cmd.logs()) {
+    if (ctx.signal.aborted) {
+      await cmd.kill('SIGTERM')
+      break
     }
 
-    if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
-      break;
+    const lines = log.data.split('\n').filter(l => l.trim())
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line)
+        if (event.type === 'result') {
+          result = event.result
+          yield { type: 'agent_text', data: { text: result } }
+        } else if (event.type === 'tool_use_summary') {
+          yield { type: 'tool_call', data: { name: 'summary', input: { summary: event.summary } } }
+        } else if (event.type === 'assistant_text') {
+          yield { type: 'agent_text', data: { text: event.text } }
+        } else if (event.type === 'error' || event.type === 'fatal_error') {
+          errorMessage = event.message
+          yield { type: 'error', data: { message: event.message } }
+        }
+      } catch {
+        // Non-JSON line, ignore or log as debug
+      }
     }
-
-    messages.push({ role: 'assistant', content: response.content });
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const toolUse of toolUseBlocks) {
-      yield { type: 'tool_call', data: { name: toolUse.name, input: toolUse.input } };
-
-      const toolOutput = await executeToolCall(toolUse.name, toolUse.input as Record<string, unknown>, ctx);
-
-      yield { type: 'tool_result', data: { name: toolUse.name, outputLength: toolOutput.length } };
-
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
-        content: toolOutput,
-      });
-    }
-
-    messages.push({ role: 'user', content: toolResults });
   }
 
-  yield { type: 'skill_result', data: { skill: skill.name, result } };
-  yield { type: 'skill_end', data: { skill: skill.name } };
-}
+  const finished = await cmd.wait()
 
-async function executeToolCall(
-  name: string,
-  input: Record<string, unknown>,
-  ctx: SkillContext
-): Promise<string> {
-  if (name === 'tavily_search' || name === 'tavily_extract') {
-    return executeTavilyTool(name, input, ctx.tavilyClient);
+  if (finished.exitCode !== 0 && !result) {
+    const stderr = await finished.stderr()
+    throw new Error(errorMessage || stderr || `Sandbox command exited with code ${finished.exitCode}`)
   }
-  if (name === 'domain_score' || name === 'batch_domain_score') {
-    return executeDomainTool(name, input);
-  }
-  return JSON.stringify({ error: `Unknown tool: ${name}` });
-}
 
-function buildTools(ctx: SkillContext, enabled: string[]): Anthropic.Tool[] {
-  const tools: Anthropic.Tool[] = [];
-  if (enabled.includes('tavily')) {
-    tools.push(...createTavilyTools(ctx.tavilyClient));
-  }
-  if (enabled.includes('domain')) {
-    tools.push(...createDomainTools());
-  }
-  return tools;
+  yield { type: 'skill_result', data: { skill: skill.name, result } }
+  yield { type: 'skill_end', data: { skill: skill.name } }
 }
 
 function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
-  const parts = [skill.body];
+  const parts = [skill.body]
 
-  parts.push('\n\n---\n## Execution Context');
-  parts.push(`- Model: ${ctx.model}`);
-  if (ctx.sessionId) parts.push(`- Session ID: ${ctx.sessionId}`);
-  if (ctx.userId) parts.push(`- User ID: ${ctx.userId}`);
+  parts.push('\n\n---\n## Execution Context')
+  parts.push(`- Model: ${ctx.model}`)
+  if (ctx.sessionId) parts.push(`- Session ID: ${ctx.sessionId}`)
+  if (ctx.userId) parts.push(`- User ID: ${ctx.userId}`)
 
-  parts.push('\n\n## Output Format');
-  parts.push('Return your final answer as a valid JSON object. Do not wrap it in markdown code blocks.');
+  parts.push('\n\n## Output Format')
+  parts.push('Return your final answer as a valid JSON object. Do not wrap it in markdown code blocks.')
 
-  return parts.join('\n');
+  return parts.join('\n')
 }
