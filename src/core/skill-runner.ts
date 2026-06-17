@@ -101,8 +101,6 @@ async function main() {
         },
       },
       mcpServers,
-      tools: [],
-      allowedTools,
       maxTurns: maxTurns || 10,
       persistSession: false,
       permissionMode: 'bypassPermissions',
