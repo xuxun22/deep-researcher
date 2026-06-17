@@ -50,187 +50,93 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
 
   try {
     const registry = await getSkillRegistry()
+    const deepResearchSkill = registry.get('deep-research')
 
-    yield { type: 'phase', data: { phase: 'query_understand' } }
+    if (!deepResearchSkill) {
+      throw new Error('deep-research skill not found')
+    }
+
     await updateSessionStatus(session.id, 'searching')
 
-    const queryResult = yield* collectSkillResult(
-      runSkill({
-        skill: registry.get('query-understand')!,
-        input: { query: input.query },
-        ctx,
-        enabledTools: [],
-      })
-    )
+    let result = ''
 
-    let parsedQuery: { keywords?: Array<{ query: string }>; intent?: string } = {}
-    try { parsedQuery = JSON.parse(queryResult) } catch {}
+    for await (const event of runSkill({
+      skill: deepResearchSkill,
+      input: { query: input.query },
+      ctx,
+      enabledTools: ['tavily', 'domain'],
+    })) {
+      yield event
 
-    await updateSessionStatus(session.id, 'searching', {
-      intent: parsedQuery.intent,
-      keywords: parsedQuery.keywords?.map(k => k.query) ?? [],
-    })
-
-    yield { type: 'phase', data: { phase: 'authority_evaluate' } }
-
-    // Code Layer: deterministic search via Tavily (parallel)
-    const keywords = parsedQuery.keywords?.map(k => k.query) ?? [input.query]
-    const searchQueries = keywords.slice(0, 2) // limit to top 2 keywords for speed
-
-    const searchPromises = searchQueries.map(async (q) => {
-      try {
-        const searchRes = await ctx.tavilyClient.search({ query: q, maxResults: 5 })
-        return searchRes.results.map(r => ({
-          url: r.url,
-          title: r.title,
-          content: r.content ?? '',
-          score: r.score ?? 0,
-        }))
-      } catch {
-        return []
+      if (event.type === 'skill_result') {
+        result = (event.data as { result?: string }).result ?? ''
       }
-    })
+    }
 
-    const allResults = (await Promise.all(searchPromises)).flat()
+    // Parse the final JSON result
+    let parsedResult: {
+      queryAnalysis?: { intent?: string; language?: string; keywords?: string[] }
+      sources?: Array<{ url: string; title: string; domain: string; domainScore: number; passed: boolean }>
+      summary?: { overview?: string; detailedAnalysis?: string; language?: string }
+      translation?: { translated?: string; originalLanguage?: string }
+    } = {}
 
-    // Deduplicate by URL and pre-rank by domain score
-    const seen = new Set<string>()
-    const uniqueResults = allResults
-      .filter(r => {
-        if (seen.has(r.url)) return false
-        seen.add(r.url)
-        return true
-      })
-      .map(r => {
-        const domain = new URL(r.url).hostname
-        let domainScore = 0.5
-        if (domain.endsWith('.edu') || domain.endsWith('.gov')) domainScore = 0.95
-        else if (domain.endsWith('.org')) domainScore = 0.75
-        else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) domainScore = 0.9
-        else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) domainScore = 0.4
-        return { ...r, domain, domainScore }
-      })
-      .sort((a, b) => b.domainScore - a.domainScore)
-      .slice(0, 8) // limit to top 8 sources for agent speed
+    try {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = result.match(/```json\s*([\s\S]*?)\s*```/)
+      if (jsonMatch) {
+        parsedResult = JSON.parse(jsonMatch[1])
+      } else {
+        parsedResult = JSON.parse(result)
+      }
+    } catch {
+      // If parsing fails, treat the whole result as summary
+      parsedResult = {
+        summary: { overview: result, detailedAnalysis: result, language: 'zh' },
+        translation: { translated: result, originalLanguage: 'zh' },
+      }
+    }
 
-    // AI Skill: evaluate authority of sources
-    const authorityResult = yield* collectSkillResult(
-      runSkill({
-        skill: registry.get('authority-evaluate')!,
-        input: {
-          query: input.query,
-          sources: uniqueResults.map(r => ({
-            url: r.url,
-            title: r.title,
-            content: r.content,
-          })),
-        },
-        ctx,
-        enabledTools: [],
-      })
-    )
-
-    let parsedAuthority: { scoredSources?: Array<{ url: string; title: string; totalScore: number; domain: string }> } = {}
-    try { parsedAuthority = JSON.parse(authorityResult) } catch {}
-
-    if (parsedAuthority.scoredSources) {
-      await insertSources(
-        parsedAuthority.scoredSources
-          .filter(s => s.totalScore >= 0.5)
-          .map(s => ({
+    // Save sources
+    if (parsedResult.sources) {
+      const passedSources = parsedResult.sources.filter(s => s.passed !== false)
+      if (passedSources.length > 0) {
+        await insertSources(
+          passedSources.map(s => ({
             session_id: session.id,
             url: s.url,
-            title: s.title,
-            domain: s.domain,
-            total_score: s.totalScore,
-            domain_score: s.totalScore,
+            title: s.title ?? '',
+            domain: s.domain ?? new URL(s.url).hostname,
+            total_score: s.domainScore ?? 0.5,
+            domain_score: s.domainScore ?? 0.5,
           }))
-      )
-    }
-
-    yield { type: 'phase', data: { phase: 'content_fetch' } }
-    await updateSessionStatus(session.id, 'analyzing')
-
-    // Code Layer: deterministic content extraction via Tavily
-    const passedUrls = parsedAuthority.scoredSources
-      ?.filter(s => s.totalScore >= 0.5)
-      .map(s => s.url) ?? []
-
-    const extractedContents: Array<{ url: string; content: string }> = []
-    if (passedUrls.length > 0) {
-      try {
-        const extractRes = await ctx.tavilyClient.extract(passedUrls.slice(0, 5))
-        for (const r of extractRes.results) {
-          if (r.raw_content) {
-            extractedContents.push({ url: r.url, content: r.raw_content })
-          }
-        }
-      } catch {
-        // fallback: use search snippets as content
-        for (const url of passedUrls.slice(0, 5)) {
-          const r = uniqueResults.find(u => u.url === url)
-          if (r) {
-            extractedContents.push({ url: r.url, content: r.content })
-          }
-        }
+        )
       }
     }
 
-    const contentResult = JSON.stringify({
-      contents: extractedContents,
-      summary: { total: extractedContents.length, success: extractedContents.length, failed: 0 },
-    })
+    await updateSessionStatus(session.id, 'analyzing')
 
-    yield { type: 'phase', data: { phase: 'summarize' } }
-
-    const summaryResult = yield* collectSkillResult(
-      runSkill({
-        skill: registry.get('summarize')!,
-        input: { query: input.query, contents: contentResult },
-        ctx,
-        enabledTools: [],
-      })
-    )
-
-    let parsedSummary: { overview?: string; detailedAnalysis?: string; language?: string } = {}
-    try { parsedSummary = JSON.parse(summaryResult) } catch {}
-
-    if (parsedSummary.overview) {
+    // Save summary
+    if (parsedResult.summary?.overview) {
       await insertSummary({
         session_id: session.id,
-        content: parsedSummary.detailedAnalysis ?? parsedSummary.overview,
-        language: parsedSummary.language,
+        content: parsedResult.summary.detailedAnalysis ?? parsedResult.summary.overview,
+        language: parsedResult.summary.language,
       })
     }
 
-    yield { type: 'phase', data: { phase: 'translate' } }
-
-    const translateResult = yield* collectSkillResult(
-      runSkill({
-        skill: registry.get('translate')!,
-        input: {
-          text: summaryResult,
-          sourceLanguage: parsedSummary.language ?? 'auto',
-        },
-        ctx,
-        enabledTools: [],
-      })
-    )
-
-    let parsedTranslation: { translated?: string; original_text?: string } = {}
-    try { parsedTranslation = JSON.parse(translateResult) } catch {}
-
-    if (parsedTranslation.translated) {
+    // Save translation
+    if (parsedResult.translation?.translated) {
       await insertTranslation({
         session_id: session.id,
-        original_text: parsedTranslation.original_text ?? summaryResult,
-        translated: parsedTranslation.translated,
+        original_text: parsedResult.summary?.overview ?? result,
+        translated: parsedResult.translation.translated,
       })
     }
 
     await updateSessionStatus(session.id, 'done', { completed_at: new Date().toISOString() })
     yield { type: 'phase', data: { phase: 'complete' } }
-    yield { type: 'result', data: { summary: summaryResult, translation: translateResult } }
+    yield { type: 'result', data: { summary: result, translation: parsedResult.translation?.translated ?? result } }
 
   } catch (err) {
     const message = err instanceof Error
@@ -240,17 +146,4 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         : String(err)
     yield { type: 'error', data: { message } }
   }
-}
-
-async function* collectSkillResult(
-  events: AsyncIterable<SkillEvent>
-): AsyncGenerator<SkillEvent, string, unknown> {
-  let result = ''
-  for await (const event of events) {
-    if (event.type === 'skill_result') {
-      result = (event.data as { result?: string }).result ?? ''
-    }
-    yield event
-  }
-  return result
 }

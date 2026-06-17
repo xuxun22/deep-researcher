@@ -1,5 +1,7 @@
 import { Sandbox } from '@vercel/sandbox'
 import { config } from '@/lib/config/env'
+import { readFile, readdir } from 'fs/promises'
+import { join } from 'path'
 
 async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
   try {
@@ -18,13 +20,35 @@ async function ensureSandboxDeps(sandbox: Sandbox): Promise<void> {
   }
 }
 
+async function installSkills(sandbox: Sandbox): Promise<void> {
+  const skillsDir = join(process.cwd(), 'src', 'skills')
+  const skillNames = await readdir(skillsDir)
+  const files: Array<{ path: string; content: string }> = []
+
+  for (const name of skillNames) {
+    if (name === 'shared') continue
+    const skillPath = join(skillsDir, name, 'SKILL.md')
+    try {
+      const content = await readFile(skillPath, 'utf-8')
+      files.push({
+        path: `/vercel/sandbox/.claude/skills/${name}/SKILL.md`,
+        content,
+      })
+    } catch {
+      // skip skills without SKILL.md
+    }
+  }
+
+  if (files.length > 0) {
+    await sandbox.writeFiles(files)
+  }
+}
+
 export async function getResearchSandbox(): Promise<Sandbox> {
-  // Always get a fresh sandbox reference so the SDK can resume the session
-  // if it was stopped between requests.
   const sbx = await Sandbox.getOrCreate({
     name: 'deep-researcher-agent',
     persistent: true,
-    timeout: 300_000, // 5 minutes
+    timeout: 300_000,
     resources: { vcpus: 2 },
     env: {
       ANTHROPIC_API_KEY: config.anthropic.apiKey(),
@@ -45,6 +69,7 @@ export async function getResearchSandbox(): Promise<Sandbox> {
         '@anthropic-ai/claude-agent-sdk',
         'zod',
       ])
+      await installSkills(sbx)
     },
   })
 
@@ -53,5 +78,5 @@ export async function getResearchSandbox(): Promise<Sandbox> {
 }
 
 export async function resetSandbox(): Promise<void> {
-  // no-op — we intentionally do not cache the sandbox reference
+  // no-op
 }

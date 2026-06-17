@@ -3,12 +3,13 @@ import { SkillRegistry } from '@/core/skill-registry';
 import { join } from 'path';
 
 describe('Skill Discovery - Real Skills', () => {
-  it('discovers all 6 skills in the project', async () => {
+  it('discovers all 7 skills in the project', async () => {
     const registry = new SkillRegistry();
     const skillsDir = join(process.cwd(), 'src', 'skills');
     await registry.discover(skillsDir);
 
     const names = registry.getNames();
+    expect(names).toContain('deep-research');
     expect(names).toContain('query-understand');
     expect(names).toContain('authority-evaluate');
     expect(names).toContain('content-fetch');

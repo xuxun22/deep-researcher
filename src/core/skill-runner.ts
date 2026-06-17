@@ -14,81 +14,76 @@ const { z } = require('zod');
 
 async function main() {
   const config = JSON.parse(process.env.SKILL_CONFIG || '{}');
-  const { systemPrompt, userInput, model, maxTurns, tools: toolConfigs } = config;
+  const { systemPrompt, userInput, model, maxTurns } = config;
 
   const mcpServers = {};
-  const allowedTools = [];
 
-  if (toolConfigs.tavily) {
-    mcpServers.tavily = createSdkMcpServer({
-      name: 'tavily',
-      tools: [
-        tool('tavily_search', 'Search the web using Tavily API', {
-          query: z.string().describe('Search query'),
-          max_results: z.number().optional().describe('Maximum number of results'),
-        }, async (args) => {
-          const res = await fetch('https://api.tavily.com/search', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
-            },
-            body: JSON.stringify(args),
-          });
-          const data = await res.json();
-          return { content: [{ type: 'text', text: JSON.stringify(data) }] };
-        }),
-        tool('tavily_extract', 'Extract content from URLs using Tavily API', {
-          urls: z.array(z.string()).describe('List of URLs to extract'),
-        }, async (args) => {
-          const res = await fetch('https://api.tavily.com/extract', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
-            },
-            body: JSON.stringify(args),
-          });
-          const data = await res.json();
-          return { content: [{ type: 'text', text: JSON.stringify(data) }] };
-        }),
-      ],
-    });
-    allowedTools.push('mcp__tavily__tavily_search', 'mcp__tavily__tavily_extract');
-  }
+  // Tavily MCP server
+  mcpServers.tavily = createSdkMcpServer({
+    name: 'tavily',
+    tools: [
+      tool('tavily_search', 'Search the web using Tavily API', {
+        query: z.string().describe('Search query'),
+        max_results: z.number().optional().describe('Max results'),
+      }, async (args) => {
+        const res = await fetch('https://api.tavily.com/search', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
+          },
+          body: JSON.stringify(args),
+        });
+        const data = await res.json();
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      }),
+      tool('tavily_extract', 'Extract content from URLs', {
+        urls: z.array(z.string()).describe('URLs to extract'),
+      }, async (args) => {
+        const res = await fetch('https://api.tavily.com/extract', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + process.env.TAVILY_API_KEY,
+          },
+          body: JSON.stringify(args),
+        });
+        const data = await res.json();
+        return { content: [{ type: 'text', text: JSON.stringify(data) }] };
+      }),
+    ],
+  });
 
-  if (toolConfigs.domain) {
-    mcpServers.domain = createSdkMcpServer({
-      name: 'domain',
-      tools: [
-        tool('domain_score', 'Evaluate domain authority score (0-1)', {
-          domain: z.string().describe('Domain name to score'),
-        }, async (args) => {
-          const { domain } = args;
+  // Domain scoring MCP server
+  mcpServers.domain = createSdkMcpServer({
+    name: 'domain',
+    tools: [
+      tool('domain_score', 'Score domain authority (0-1)', {
+        domain: z.string().describe('Domain name'),
+      }, async (args) => {
+        const { domain } = args;
+        let score = 0.5;
+        if (domain.endsWith('.edu') || domain.endsWith('.gov')) score = 0.95;
+        else if (domain.endsWith('.org')) score = 0.75;
+        else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) score = 0.9;
+        else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) score = 0.4;
+        return { content: [{ type: 'text', text: JSON.stringify({ domain, score }) }] };
+      }),
+      tool('batch_domain_score', 'Score multiple domains', {
+        domains: z.array(z.string()).describe('Domain names'),
+      }, async (args) => {
+        const results = args.domains.map(domain => {
           let score = 0.5;
           if (domain.endsWith('.edu') || domain.endsWith('.gov')) score = 0.95;
           else if (domain.endsWith('.org')) score = 0.75;
           else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) score = 0.9;
           else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) score = 0.4;
-          return { content: [{ type: 'text', text: JSON.stringify({ domain, score }) }] };
-        }),
-        tool('batch_domain_score', 'Score multiple domains at once', {
-          domains: z.array(z.string()).describe('List of domain names'),
-        }, async (args) => {
-          const results = args.domains.map(domain => {
-            let score = 0.5;
-            if (domain.endsWith('.edu') || domain.endsWith('.gov')) score = 0.95;
-            else if (domain.endsWith('.org')) score = 0.75;
-            else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) score = 0.9;
-            else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) score = 0.4;
-            return { domain, score };
-          });
-          return { content: [{ type: 'text', text: JSON.stringify({ results }) }] };
-        }),
-      ],
-    });
-    allowedTools.push('mcp__domain__domain_score', 'mcp__domain__batch_domain_score');
-  }
+          return { domain, score };
+        });
+        return { content: [{ type: 'text', text: JSON.stringify({ results }) }] };
+      }),
+    ],
+  });
 
   const q = query({
     prompt: userInput,
@@ -97,12 +92,12 @@ async function main() {
       agent: 'main',
       agents: {
         main: {
-          description: 'Main research skill agent',
+          description: 'Deep research agent',
           prompt: systemPrompt,
         },
       },
       mcpServers,
-      maxTurns: maxTurns || 10,
+      maxTurns: maxTurns || 15,
       persistSession: false,
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
@@ -136,22 +131,17 @@ main().catch(err => {
 `
 
 export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEvent> {
-  const { skill, input, ctx, enabledTools } = options
+  const { skill, input, ctx } = options
 
   yield { type: 'skill_start', data: { skill: skill.name } }
 
   const sandbox = await getResearchSandbox()
 
-  const toolConfigs: Record<string, boolean> = {}
-  if (enabledTools?.includes('tavily')) toolConfigs.tavily = true
-  if (enabledTools?.includes('domain')) toolConfigs.domain = true
-
   const configPayload = {
     systemPrompt: buildSystemPrompt(skill, ctx),
     userInput: JSON.stringify(input),
     model: ctx.model,
-    maxTurns: 10,
-    tools: toolConfigs,
+    maxTurns: 15,
   }
 
   const scriptName = `skill-runner-${ctx.sessionId ?? Date.now()}.js`
@@ -212,12 +202,14 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
           yield { type: 'tool_call', data: { name: 'summary', input: { summary: event.summary } } }
         } else if (event.type === 'assistant_text') {
           yield { type: 'agent_text', data: { text: event.text } }
+        } else if (event.type === 'tool_call') {
+          yield { type: 'tool_call', data: { name: event.name, input: event.input } }
         } else if (event.type === 'error' || event.type === 'fatal_error') {
           errorMessage = event.message
           yield { type: 'error', data: { message: event.message } }
         }
       } catch {
-        // Non-JSON line, ignore or log as debug
+        // Non-JSON line, ignore
       }
     }
   }
