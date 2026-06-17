@@ -40,5 +40,9 @@ export async function GET() {
 
   checks.database = dbStatus;
 
-  return Response.json({ status: 'ok', checks });
+  return Response.json({
+    status: 'ok',
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'unknown',
+    checks,
+  });
 }
