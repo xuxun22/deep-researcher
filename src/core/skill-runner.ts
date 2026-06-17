@@ -146,13 +146,11 @@ async function main() {
   });
 
   let capturedJson = '';
+  let lastAssistantText = '';
 
   for await (const msg of q) {
     if (msg.type === 'result' && msg.subtype === 'success') {
-      // Only capture text result if we haven't already captured structured JSON
-      if (!capturedJson) {
-        result = msg.result;
-      }
+      result = msg.result;
       if (msg.structured_output) {
         capturedJson = JSON.stringify(msg.structured_output);
       }
@@ -163,6 +161,7 @@ async function main() {
       const text = msg.message?.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
       const toolUses = msg.message?.content?.filter(b => b.type === 'tool_use') || [];
       if (text) {
+        lastAssistantText = text;
         console.log(JSON.stringify({ type: 'assistant_text', text }));
       }
       for (const tu of toolUses) {
@@ -176,10 +175,6 @@ async function main() {
     }
   }
 
-  // Always prefer captured structured JSON over text result
-  if (capturedJson) {
-    result = capturedJson;
-  }
 }
 
 main().catch(err => {
@@ -242,6 +237,8 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
 
   let result = ''
   let errorMessage = ''
+  let capturedJson = ''
+  let lastAssistantText = ''
 
   for await (const log of cmd.logs()) {
     if (ctx.signal.aborted) {
@@ -259,15 +256,35 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
         } else if (event.type === 'tool_use_summary') {
           yield { type: 'tool_call', data: { name: 'summary', input: { summary: event.summary } } }
         } else if (event.type === 'assistant_text') {
+          lastAssistantText = event.text
           yield { type: 'agent_text', data: { text: event.text } }
         } else if (event.type === 'tool_call') {
           yield { type: 'tool_call', data: { name: event.name, input: event.input } }
+          if (event.name === 'StructuredOutput' && event.input && Object.keys(event.input).length > 0) {
+            capturedJson = JSON.stringify(event.input)
+          }
         } else if (event.type === 'error' || event.type === 'fatal_error') {
           errorMessage = event.message
           yield { type: 'error', data: { message: event.message } }
         }
       } catch {
         // Non-JSON line, ignore
+      }
+    }
+  }
+
+  // Prefer captured structured JSON from outputFormat
+  if (capturedJson) {
+    result = capturedJson
+  } else if (lastAssistantText) {
+    // Fallback: extract JSON from markdown code blocks
+    const codeBlockMatch = lastAssistantText.match(/```json\s*([\s\S]*?)\s*```/)
+    if (codeBlockMatch) {
+      try {
+        JSON.parse(codeBlockMatch[1])
+        result = codeBlockMatch[1]
+      } catch {
+        // invalid JSON, keep text
       }
     }
   }
