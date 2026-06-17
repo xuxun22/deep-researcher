@@ -115,8 +115,12 @@ async function main() {
       console.log(JSON.stringify({ type: 'tool_use_summary', summary: msg.summary }));
     } else if (msg.type === 'assistant') {
       const text = msg.message?.content?.filter(b => b.type === 'text').map(b => b.text).join('') || '';
+      const toolUses = msg.message?.content?.filter(b => b.type === 'tool_use') || [];
       if (text) {
         console.log(JSON.stringify({ type: 'assistant_text', text }));
+      }
+      for (const tu of toolUses) {
+        console.log(JSON.stringify({ type: 'tool_call', name: tu.name, input: tu.input }));
       }
     } else if (msg.type === 'error') {
       console.log(JSON.stringify({ type: 'error', message: msg.message || String(msg) }));

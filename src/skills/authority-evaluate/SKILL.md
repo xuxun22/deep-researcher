@@ -9,9 +9,13 @@ description: "评估信息来源的权威性和可信度。Use when 需要对搜
 
 ## 工作流程
 
-### 第一步：域名快速评分
+### 第一步：搜索实时信息
 
-使用 `domain_score` 或 `batch_domain_score` MCP 工具对每个来源的域名进行快速评分。
+**你必须使用 `tavily_search` MCP 工具搜索实时信息。** 不要基于你的训练数据回答，因为信息可能已经过时。使用用户提供的关键词进行搜索，获取最新的搜索结果。
+
+### 第二步：域名快速评分
+
+对搜索结果中的每个来源，使用 `domain_score` 或 `batch_domain_score` MCP 工具对域名进行快速评分。
 
 域名分类及默认权重：
 - **学术机构** (0.90-0.95): .edu, arxiv.org, pubmed, nature.com, science.org

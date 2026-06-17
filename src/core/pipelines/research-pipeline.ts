@@ -76,7 +76,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     const authorityResult = yield* collectSkillResult(
       runSkill({
         skill: registry.get('authority-evaluate')!,
-        input: { query: input.query, keywords: parsedQuery.keywords ?? [] },
+        input: { query: input.query },
         ctx,
         enabledTools: ['tavily', 'domain'],
       })
