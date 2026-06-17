@@ -1,83 +1,116 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { readdir, readFile, access } from 'fs/promises';
 import { join } from 'path';
 import type { SkillMeta, SkillContext, SkillEvent, SkillInput } from './skill-types';
-import { writeToSandbox } from '@/lib/sandbox/manager';
-import { createTavilyMcpServer } from './mcp-tools/tavily-search-tool';
-import { createDomainScoreMcpServer } from './mcp-tools/domain-score-tool';
-import { config } from '@/lib/config/env';
+import { getAnthropicClient } from '@/lib/ai/client';
+import { createTools as createTavilyTools, executeTool as executeTavilyTool } from './tools/tavily-tools';
+import { createTools as createDomainTools, executeTool as executeDomainTool } from './tools/domain-tools';
 
 export interface RunSkillOptions {
   skill: SkillMeta;
   input: SkillInput;
   ctx: SkillContext;
-  allowedTools?: string[];
-  extraMcpServers?: Record<string, ReturnType<typeof createTavilyMcpServer>>;
+  enabledTools?: ('tavily' | 'domain')[];
 }
 
 export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEvent> {
-  const { skill, input, ctx, allowedTools, extraMcpServers } = options;
+  const { skill, input, ctx, enabledTools } = options;
 
   yield { type: 'skill_start', data: { skill: skill.name } };
 
-  await prepareSkillWorkspace(skill, input, ctx);
-
-  const tavilyServer = createTavilyMcpServer(ctx.tavilyClient);
-  const domainScoreServer = createDomainScoreMcpServer(ctx.domainRules);
-
-  const mcpServers = {
-    tavily: tavilyServer,
-    domainScore: domainScoreServer,
-    ...(extraMcpServers ?? {}),
-  };
-
-  const agents = await loadSubagents(skill.skillDir);
-
+  const tools = buildTools(ctx, enabledTools ?? ['tavily', 'domain']);
   const systemPrompt = buildSystemPrompt(skill, ctx);
 
-  const agentQuery = query({
-    prompt: JSON.stringify(input),
-    options: {
-      systemPrompt,
-      cwd: ctx.sandbox.workspacePath,
-      mcpServers,
-      agents: Object.keys(agents).length > 0 ? agents : undefined,
-      allowedTools: allowedTools ?? ['Read', 'WebFetch', 'Bash'],
-      model: ctx.model,
-      maxTurns: 10,
-      env: {
-        ANTHROPIC_API_KEY: config.anthropic.apiKey(),
-        ...(config.anthropic.baseUrl() && {
-          ANTHROPIC_BASE_URL: config.anthropic.baseUrl(),
-        }),
-      },
-    },
-  });
+  const messages: Anthropic.MessageParam[] = [
+    { role: 'user', content: JSON.stringify(input) },
+  ];
 
-  let result: string | undefined;
+  const client = getAnthropicClient();
+  const maxTurns = 10;
+  let result = '';
 
-  for await (const message of agentQuery) {
+  for (let turn = 0; turn < maxTurns; turn++) {
     if (ctx.signal.aborted) break;
 
-    if ('result' in message) {
-      result = message.result;
-    } else {
-      yield {
-        type: 'agent_message',
-        data: { ...(typeof message === 'object' ? message : {}) },
-      };
+    yield { type: 'agent_turn', data: { turn: turn + 1 } };
+
+    const response = await client.messages.create({
+      model: ctx.model,
+      max_tokens: 8192,
+      system: systemPrompt,
+      tools: tools.length > 0 ? tools : undefined,
+      messages,
+    });
+
+    const textBlocks = response.content.filter(
+      (b): b is Anthropic.TextBlock => b.type === 'text'
+    );
+    const toolUseBlocks = response.content.filter(
+      (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use'
+    );
+
+    if (textBlocks.length > 0) {
+      result = textBlocks.map(b => b.text).join('\n');
+      yield { type: 'agent_text', data: { text: result } };
     }
+
+    if (toolUseBlocks.length === 0 || response.stop_reason === 'end_turn') {
+      break;
+    }
+
+    messages.push({ role: 'assistant', content: response.content });
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const toolUse of toolUseBlocks) {
+      yield { type: 'tool_call', data: { name: toolUse.name, input: toolUse.input } };
+
+      const toolOutput = await executeToolCall(toolUse.name, toolUse.input as Record<string, unknown>, ctx);
+
+      yield { type: 'tool_result', data: { name: toolUse.name, outputLength: toolOutput.length } };
+
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: toolUse.id,
+        content: toolOutput,
+      });
+    }
+
+    messages.push({ role: 'user', content: toolResults });
   }
 
   yield { type: 'skill_result', data: { skill: skill.name, result } };
   yield { type: 'skill_end', data: { skill: skill.name } };
 }
 
+async function executeToolCall(
+  name: string,
+  input: Record<string, unknown>,
+  ctx: SkillContext
+): Promise<string> {
+  if (name === 'tavily_search' || name === 'tavily_extract') {
+    return executeTavilyTool(name, input, ctx.tavilyClient);
+  }
+  if (name === 'domain_score' || name === 'batch_domain_score') {
+    return executeDomainTool(name, input);
+  }
+  return JSON.stringify({ error: `Unknown tool: ${name}` });
+}
+
+function buildTools(ctx: SkillContext, enabled: string[]): Anthropic.Tool[] {
+  const tools: Anthropic.Tool[] = [];
+  if (enabled.includes('tavily')) {
+    tools.push(...createTavilyTools(ctx.tavilyClient));
+  }
+  if (enabled.includes('domain')) {
+    tools.push(...createDomainTools());
+  }
+  return tools;
+}
+
 function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   const parts = [skill.body];
 
   parts.push('\n\n---\n## Execution Context');
-  parts.push(`- Working directory: ${ctx.sandbox.workspacePath}`);
   parts.push(`- Model: ${ctx.model}`);
   if (ctx.sessionId) parts.push(`- Session ID: ${ctx.sessionId}`);
   if (ctx.userId) parts.push(`- User ID: ${ctx.userId}`);
@@ -86,60 +119,4 @@ function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   parts.push('Return your final answer as a valid JSON object. Do not wrap it in markdown code blocks.');
 
   return parts.join('\n');
-}
-
-async function prepareSkillWorkspace(
-  skill: SkillMeta,
-  input: SkillInput,
-  ctx: SkillContext
-): Promise<void> {
-  const files: Array<{ path: string; content: string }> = [
-    { path: 'input.json', content: JSON.stringify(input, null, 2) },
-  ];
-
-  const refDir = join(skill.skillDir, 'reference');
-  try {
-    await access(refDir);
-    const refFiles = await readdir(refDir);
-    for (const refFile of refFiles) {
-      const content = await readFile(join(refDir, refFile), 'utf-8');
-      files.push({ path: `reference/${refFile}`, content });
-    }
-  } catch {
-    // no reference directory
-  }
-
-  await writeToSandbox(ctx.sandbox, files);
-}
-
-async function loadSubagents(
-  skillDir: string
-): Promise<Record<string, { description: string; prompt: string; tools: string[] }>> {
-  const agentsDir = join(skillDir, 'agents');
-  const agents: Record<string, { description: string; prompt: string; tools: string[] }> = {};
-
-  try {
-    await access(agentsDir);
-  } catch {
-    return agents;
-  }
-
-  const files = await readdir(agentsDir);
-  for (const file of files) {
-    if (!file.endsWith('.md')) continue;
-
-    const content = await readFile(join(agentsDir, file), 'utf-8');
-    const agentName = file.replace('.md', '');
-    const lines = content.split('\n');
-    const description = lines.find(l => l.startsWith('description:'))?.replace('description:', '').trim()
-      ?? `Subagent: ${agentName}`;
-
-    agents[agentName] = {
-      description,
-      prompt: content,
-      tools: ['Read', 'Grep', 'Glob'],
-    };
-  }
-
-  return agents;
 }

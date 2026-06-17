@@ -1,5 +1,3 @@
-import type { z } from 'zod';
-import type { SandboxContext } from '@/lib/sandbox/manager';
 import type { TavilyClient } from '@/lib/search/tavily-client';
 import type { DomainRule } from '@/lib/authority/domain-rules';
 
@@ -20,7 +18,6 @@ export interface SkillEvent {
 }
 
 export interface SkillContext {
-  sandbox: SandboxContext;
   model: string;
   tavilyClient: TavilyClient;
   domainRules: DomainRule[];

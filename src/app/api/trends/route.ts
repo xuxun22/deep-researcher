@@ -6,7 +6,6 @@ import { runSkill } from '@/core/skill-runner';
 import type { SkillContext } from '@/core/skill-types';
 import { getTavilyClient } from '@/lib/search/tavily-client';
 import { getDomainRules } from '@/lib/authority/domain-rules';
-import { getOrCreateSandbox, cleanupSandbox } from '@/lib/sandbox/manager';
 import { config } from '@/lib/config/env';
 import { insertTrendAnalysis } from '@/lib/db/queries/trends';
 
@@ -39,8 +38,6 @@ export async function POST(request: NextRequest) {
   const { stream, send, close, error } = createSSEStream();
 
   (async () => {
-    const sandbox = await getOrCreateSandbox(`trend-${Date.now()}`);
-
     try {
       const sessions = await getSessionsForTrendAnalysis({ user_id: userId, days, limit: 100 });
 
@@ -54,7 +51,6 @@ export async function POST(request: NextRequest) {
 
       const registry = await getSkillRegistry();
       const ctx: SkillContext = {
-        sandbox,
         model: config.defaultModel,
         tavilyClient: getTavilyClient(),
         domainRules: getDomainRules(),
@@ -75,7 +71,7 @@ export async function POST(request: NextRequest) {
           days,
         },
         ctx,
-        allowedTools: ['Read'],
+        enabledTools: [],
       })) {
         send(event);
         if (event.type === 'skill_result') {
@@ -98,8 +94,6 @@ export async function POST(request: NextRequest) {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       error(message);
-    } finally {
-      await cleanupSandbox(sandbox.sandbox);
     }
   })();
 

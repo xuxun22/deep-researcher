@@ -3,7 +3,6 @@ import { runSkill } from '@/core/skill-runner';
 import type { SkillContext, SkillEvent } from '@/core/skill-types';
 import { getTavilyClient } from '@/lib/search/tavily-client';
 import { getDomainRules } from '@/lib/authority/domain-rules';
-import { createEphemeralSandbox, cleanupSandbox } from '@/lib/sandbox/manager';
 import { config } from '@/lib/config/env';
 import {
   createSession,
@@ -40,10 +39,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
 
   yield { type: 'session_created', data: { sessionId: session.id } };
 
-  const sandbox = await createEphemeralSandbox();
-
   const ctx: SkillContext = {
-    sandbox,
     model,
     tavilyClient: getTavilyClient(),
     domainRules: getDomainRules(),
@@ -63,14 +59,12 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         skill: registry.get('query-understand')!,
         input: { query: input.query },
         ctx,
-        allowedTools: ['Read'],
+        enabledTools: [],
       })
     );
 
     let parsedQuery: { keywords?: Array<{ query: string }>; intent?: string } = {};
-    try {
-      parsedQuery = JSON.parse(queryResult);
-    } catch {}
+    try { parsedQuery = JSON.parse(queryResult); } catch {}
 
     await updateSessionStatus(session.id, 'searching', {
       intent: parsedQuery.intent,
@@ -84,14 +78,12 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         skill: registry.get('authority-evaluate')!,
         input: { query: input.query, keywords: parsedQuery.keywords ?? [] },
         ctx,
-        allowedTools: ['Read', 'Bash'],
+        enabledTools: ['tavily', 'domain'],
       })
     );
 
     let parsedAuthority: { scoredSources?: Array<{ url: string; title: string; totalScore: number; domain: string }> } = {};
-    try {
-      parsedAuthority = JSON.parse(authorityResult);
-    } catch {}
+    try { parsedAuthority = JSON.parse(authorityResult); } catch {}
 
     if (parsedAuthority.scoredSources) {
       await insertSources(
@@ -120,7 +112,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
             .map(s => s.url) ?? [],
         },
         ctx,
-        allowedTools: ['Read', 'WebFetch'],
+        enabledTools: ['tavily'],
       })
     );
 
@@ -129,19 +121,14 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     const summaryResult = yield* collectSkillResult(
       runSkill({
         skill: registry.get('summarize')!,
-        input: {
-          query: input.query,
-          contents: contentResult,
-        },
+        input: { query: input.query, contents: contentResult },
         ctx,
-        allowedTools: ['Read'],
+        enabledTools: [],
       })
     );
 
     let parsedSummary: { overview?: string; detailedAnalysis?: string; language?: string } = {};
-    try {
-      parsedSummary = JSON.parse(summaryResult);
-    } catch {}
+    try { parsedSummary = JSON.parse(summaryResult); } catch {}
 
     if (parsedSummary.overview) {
       await insertSummary({
@@ -161,14 +148,12 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
           sourceLanguage: parsedSummary.language ?? 'auto',
         },
         ctx,
-        allowedTools: ['Read'],
+        enabledTools: [],
       })
     );
 
     let parsedTranslation: { translated?: string; original_text?: string } = {};
-    try {
-      parsedTranslation = JSON.parse(translateResult);
-    } catch {}
+    try { parsedTranslation = JSON.parse(translateResult); } catch {}
 
     if (parsedTranslation.translated) {
       await insertTranslation({
@@ -189,8 +174,6 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         ? JSON.stringify(err, null, 2)
         : String(err);
     yield { type: 'error', data: { message } };
-  } finally {
-    await cleanupSandbox(sandbox.sandbox);
   }
 }
 
