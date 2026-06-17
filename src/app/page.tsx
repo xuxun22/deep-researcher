@@ -57,7 +57,6 @@ interface TrendAnalysis {
 interface ModelInfo {
   id: string
   name: string
-  provider: string
 }
 
 export default function Home() {
@@ -93,9 +92,21 @@ export default function Home() {
     fetch("/api/models")
       .then((r) => r.json())
       .then((d) => {
-        if (d.models && Array.isArray(d.models)) {
-          setAvailableModels(d.models)
-          if (d.models.length > 0) setModel(d.models[0].id)
+        if (d.models && typeof d.models === "object" && !Array.isArray(d.models)) {
+          const entries = Object.entries(d.models).map(([id, info]) => ({
+            id,
+            name: (info as { name?: string }).name || id,
+          }))
+          setAvailableModels(entries)
+          const firstKey = Object.keys(d.models)[0]
+          if (firstKey) setModel(firstKey)
+        } else if (d.models && Array.isArray(d.models)) {
+          const entries = d.models.map((m: { id?: string; name?: string }) => ({
+            id: m.id || String(m),
+            name: m.name || m.id || String(m),
+          }))
+          setAvailableModels(entries)
+          if (entries.length > 0) setModel(entries[0].id)
         }
       })
       .catch(() => {})
