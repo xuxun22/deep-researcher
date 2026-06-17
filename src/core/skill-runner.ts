@@ -227,8 +227,12 @@ function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   if (ctx.sessionId) parts.push(`- Session ID: ${ctx.sessionId}`)
   if (ctx.userId) parts.push(`- User ID: ${ctx.userId}`)
 
-  parts.push('\n\n## Output Format')
-  parts.push('Return your final answer as a valid JSON object. Do not wrap it in markdown code blocks.')
+  parts.push('\n\n## CRITICAL RULES')
+  parts.push('1. You MUST use tavily_search tool to search for real-time information.')
+  parts.push('2. You MUST evaluate every source with domain_score.')
+  parts.push('3. You MUST include ALL searched sources in the "sources" array of your final JSON.')
+  parts.push('4. Output ONLY raw JSON — no markdown code blocks, no ```json tags.')
+  parts.push('5. Ensure the JSON is valid and parseable.')
 
   return parts.join('\n')
 }

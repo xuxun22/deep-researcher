@@ -43,13 +43,13 @@ description: "执行完整的深度研究流程。Use when 用户提交一个研
 3. **提取不超过 3 个来源** — 控制时间
 4. **必须评估来源** — 每个来源都要打分
 5. **只使用可信来源** — domain_score < 0.5 的排除
-6. **返回 JSON** — 最终结果必须是严格的 JSON
+6. **必须返回 sources** — 你搜索到的每个来源都必须包含在 JSON 的 sources 数组中
+7. **返回严格 JSON** — 不要添加 markdown 代码块标记，直接输出纯 JSON
 
 ## 输出格式
 
-返回一个 JSON 对象：
+**直接输出纯 JSON，不要加 ```json 标记。** 格式如下：
 
-```json
 {
   "queryAnalysis": {
     "intent": "information",
@@ -58,21 +58,20 @@ description: "执行完整的深度研究流程。Use when 用户提交一个研
   },
   "sources": [
     {
-      "url": "...",
-      "title": "...",
-      "domain": "...",
+      "url": "https://example.com/article",
+      "title": "Article Title",
+      "domain": "example.com",
       "domainScore": 0.85,
       "passed": true
     }
   ],
   "summary": {
-    "overview": "...",
-    "detailedAnalysis": "...",
+    "overview": "简要概述...",
+    "detailedAnalysis": "详细分析...",
     "language": "zh"
   },
   "translation": {
-    "translated": "...",
+    "translated": "中文翻译...",
     "originalLanguage": "en"
   }
 }
-```

@@ -97,6 +97,26 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
       }
     }
 
+    // Fallback: extract URLs from result text if sources array is missing or empty
+    if (!parsedResult.sources || parsedResult.sources.length === 0) {
+      const urlMatches = result.match(/https?:\/\/[^\s\)"]+/g) || []
+      if (urlMatches.length > 0) {
+        parsedResult.sources = urlMatches.map(url => {
+          try {
+            const domain = new URL(url).hostname
+            let domainScore = 0.5
+            if (domain.endsWith('.edu') || domain.endsWith('.gov')) domainScore = 0.95
+            else if (domain.endsWith('.org')) domainScore = 0.75
+            else if (['wikipedia.org','arxiv.org','nature.com','ieee.org','acm.org','sciencedirect.com','springer.com','mit.edu','stanford.edu'].some(d => domain.includes(d))) domainScore = 0.9
+            else if (['github.com','medium.com','reddit.com','twitter.com','x.com'].some(d => domain.includes(d))) domainScore = 0.4
+            return { url, title: '', domain, domainScore, passed: domainScore >= 0.5 }
+          } catch {
+            return { url, title: '', domain: url, domainScore: 0.5, passed: true }
+          }
+        })
+      }
+    }
+
     // Save sources
     if (parsedResult.sources) {
       const passedSources = parsedResult.sources.filter(s => s.passed !== false)
