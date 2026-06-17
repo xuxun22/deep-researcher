@@ -73,27 +73,25 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
 
     yield { type: 'phase', data: { phase: 'authority_evaluate' } }
 
-    // Code Layer: deterministic search via Tavily
+    // Code Layer: deterministic search via Tavily (parallel)
     const keywords = parsedQuery.keywords?.map(k => k.query) ?? [input.query]
-    const searchQueries = keywords.slice(0, 3) // limit to top 3 keywords
-    const allResults: Array<{ url: string; title: string; content: string; score: number }> = []
+    const searchQueries = keywords.slice(0, 2) // limit to top 2 keywords for speed
 
-    for (const q of searchQueries) {
-      if (ctx.signal.aborted) break
+    const searchPromises = searchQueries.map(async (q) => {
       try {
         const searchRes = await ctx.tavilyClient.search({ query: q, maxResults: 5 })
-        for (const r of searchRes.results) {
-          allResults.push({
-            url: r.url,
-            title: r.title,
-            content: r.content ?? '',
-            score: r.score ?? 0,
-          })
-        }
+        return searchRes.results.map(r => ({
+          url: r.url,
+          title: r.title,
+          content: r.content ?? '',
+          score: r.score ?? 0,
+        }))
       } catch {
-        // ignore individual search failures
+        return []
       }
-    }
+    })
+
+    const allResults = (await Promise.all(searchPromises)).flat()
 
     // Deduplicate by URL and pre-rank by domain score
     const seen = new Set<string>()
@@ -113,7 +111,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         return { ...r, domain, domainScore }
       })
       .sort((a, b) => b.domainScore - a.domainScore)
-      .slice(0, 12) // limit to top 12 sources for agent
+      .slice(0, 8) // limit to top 8 sources for agent speed
 
     // AI Skill: evaluate authority of sources
     const authorityResult = yield* collectSkillResult(
