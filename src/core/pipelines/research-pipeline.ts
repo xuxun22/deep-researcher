@@ -151,6 +151,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
         session_id: session.id,
         original_text: parsedResult.summary?.overview ?? result,
         translated: parsedResult.translation.translated,
+        original_language: parsedResult.translation.originalLanguage ?? null,
       })
     }
 

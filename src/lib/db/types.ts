@@ -159,6 +159,7 @@ export interface Database {
           session_id: string;
           original_text: string;
           translated: string;
+          original_language: string | null;
           glossary: Json | null;
           created_at: string;
         };
@@ -167,6 +168,7 @@ export interface Database {
           session_id: string;
           original_text: string;
           translated: string;
+          original_language?: string | null;
           glossary?: Json | null;
           created_at?: string;
         };
@@ -175,6 +177,7 @@ export interface Database {
           session_id?: string;
           original_text?: string;
           translated?: string;
+          original_language?: string | null;
           glossary?: Json | null;
           created_at?: string;
         };

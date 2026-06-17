@@ -5,6 +5,7 @@ export async function insertTranslation(data: {
   session_id: string;
   original_text: string;
   translated: string;
+  original_language?: string | null;
   glossary?: Json;
 }): Promise<Translation> {
   const supabase = getSupabaseClient();
@@ -14,6 +15,7 @@ export async function insertTranslation(data: {
       session_id: data.session_id,
       original_text: data.original_text,
       translated: data.translated,
+      original_language: data.original_language ?? null,
       glossary: data.glossary ?? null,
     })
     .select()
