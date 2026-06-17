@@ -149,7 +149,10 @@ async function main() {
 
   for await (const msg of q) {
     if (msg.type === 'result' && msg.subtype === 'success') {
-      result = msg.result;
+      // Only capture text result if we haven't already captured structured JSON
+      if (!capturedJson) {
+        result = msg.result;
+      }
       if (msg.structured_output) {
         capturedJson = JSON.stringify(msg.structured_output);
       }
@@ -173,6 +176,7 @@ async function main() {
     }
   }
 
+  // Always prefer captured structured JSON over text result
   if (capturedJson) {
     result = capturedJson;
   }
