@@ -53,7 +53,7 @@ async function main() {
         }),
       ],
     });
-    allowedTools.push('tavily_search', 'tavily_extract');
+    allowedTools.push('mcp__tavily__tavily_search', 'mcp__tavily__tavily_extract');
   }
 
   if (toolConfigs.domain) {
@@ -86,13 +86,20 @@ async function main() {
         }),
       ],
     });
-    allowedTools.push('domain_score', 'batch_domain_score');
+    allowedTools.push('mcp__domain__domain_score', 'mcp__domain__batch_domain_score');
   }
 
   const q = query({
     prompt: userInput,
     options: {
       model: model || process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+      agent: 'main',
+      agents: {
+        main: {
+          description: 'Main research skill agent',
+          prompt: systemPrompt,
+        },
+      },
       mcpServers,
       tools: [],
       allowedTools,
