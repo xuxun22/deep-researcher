@@ -12,12 +12,21 @@ export async function GET(request: NextRequest) {
     return Response.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const result = await listSessions({
-    user_id: userId,
-    limit,
-    offset,
-    status: status ?? undefined,
-  });
+  try {
+    const result = await listSessions({
+      user_id: userId,
+      limit,
+      offset,
+      status: status ?? undefined,
+    });
 
-  return Response.json(result);
+    return Response.json(result);
+  } catch (err) {
+    const message = err instanceof Error
+      ? err.message
+      : typeof err === 'object' && err !== null
+        ? JSON.stringify(err)
+        : String(err);
+    return Response.json({ error: message }, { status: 500 });
+  }
 }

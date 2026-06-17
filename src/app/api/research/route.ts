@@ -30,7 +30,11 @@ export async function POST(request: NextRequest) {
       }
       close();
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null
+          ? JSON.stringify(err, null, 2)
+          : String(err);
       error(message);
     }
   })();

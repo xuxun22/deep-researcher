@@ -19,9 +19,17 @@ export const config = {
   },
   supabase: {
     url: () => {
-      const url = process.env.SUPABASE_URL;
-      if (!url) throw new Error('SUPABASE_URL is not set');
+      const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+      if (!url) throw new Error('SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL must be set');
       return url;
+    },
+    serviceKey: () => process.env.SUPABASE_SERVICE_ROLE_KEY,
+    anonKey: () => {
+      const key = process.env.SUPABASE_ANON_KEY
+        ?? process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!key) throw new Error('SUPABASE_ANON_KEY or NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY must be set');
+      return key;
     },
   },
   vercel: {

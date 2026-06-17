@@ -183,8 +183,11 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     yield { type: 'result', data: { summary: summaryResult, translation: translateResult } };
 
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    await updateSessionStatus(session.id, 'failed');
+    const message = err instanceof Error
+      ? err.message
+      : typeof err === 'object' && err !== null
+        ? JSON.stringify(err, null, 2)
+        : String(err);
     yield { type: 'error', data: { message } };
   } finally {
     await cleanupSandbox(sandbox.sandbox);
