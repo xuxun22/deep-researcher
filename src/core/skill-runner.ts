@@ -145,8 +145,12 @@ async function main() {
     },
   });
 
+  let structuredOutput: unknown = null
+
   for await (const msg of q) {
     if (msg.type === 'result' && msg.subtype === 'success') {
+      result = msg.result
+      structuredOutput = (msg as unknown as { structured_output?: unknown }).structured_output ?? null
       console.log(JSON.stringify({ type: 'result', result: msg.result }));
     } else if (msg.type === 'tool_use_summary') {
       console.log(JSON.stringify({ type: 'tool_use_summary', summary: msg.summary }));
@@ -162,6 +166,11 @@ async function main() {
     } else if (msg.type === 'error') {
       console.log(JSON.stringify({ type: 'error', message: msg.message || String(msg) }));
     }
+  }
+
+  // If we got structured output from outputFormat, use that as the final result
+  if (structuredOutput && typeof structuredOutput === 'object') {
+    result = JSON.stringify(structuredOutput)
   }
 }
 
