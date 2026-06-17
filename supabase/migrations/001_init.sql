@@ -1,3 +1,18 @@
+CREATE TABLE IF NOT EXISTS research_schedules (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id       TEXT NOT NULL,
+  name          TEXT NOT NULL,
+  query         TEXT NOT NULL,
+  cron_expr     TEXT NOT NULL,
+  model         TEXT DEFAULT 'claude-sonnet-4-6',
+  config        JSONB DEFAULT '{}',
+  is_active     BOOLEAN DEFAULT true,
+  last_run_at   TIMESTAMPTZ,
+  next_run_at   TIMESTAMPTZ,
+  created_at    TIMESTAMPTZ DEFAULT now(),
+  updated_at    TIMESTAMPTZ DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS research_sessions (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       TEXT NOT NULL,
@@ -47,21 +62,6 @@ CREATE TABLE IF NOT EXISTS translations (
   translated    TEXT NOT NULL,
   glossary      JSONB,
   created_at    TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS research_schedules (
-  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id       TEXT NOT NULL,
-  name          TEXT NOT NULL,
-  query         TEXT NOT NULL,
-  cron_expr     TEXT NOT NULL,
-  model         TEXT DEFAULT 'claude-sonnet-4-6',
-  config        JSONB DEFAULT '{}',
-  is_active     BOOLEAN DEFAULT true,
-  last_run_at   TIMESTAMPTZ,
-  next_run_at   TIMESTAMPTZ,
-  created_at    TIMESTAMPTZ DEFAULT now(),
-  updated_at    TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE IF NOT EXISTS trend_analyses (
