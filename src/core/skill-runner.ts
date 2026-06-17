@@ -1,5 +1,6 @@
 import type { SkillMeta, SkillContext, SkillEvent, SkillInput } from './skill-types'
 import { getResearchSandbox } from '@/lib/sandbox/sandbox-client'
+import type { Command } from '@vercel/sandbox'
 
 export interface RunSkillOptions {
   skill: SkillMeta
@@ -162,18 +163,34 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
 
   yield { type: 'agent_turn', data: { turn: 1 } }
 
-  const cmd = await sandbox.runCommand({
-    cmd: 'node',
-    args: [scriptName],
-    cwd: '/vercel/sandbox',
-    detached: true,
-    env: {
-      ...Object.fromEntries(
-        Object.entries(process.env).filter(([, v]) => v !== undefined)
-      ) as Record<string, string>,
-      SKILL_CONFIG: JSON.stringify(configPayload),
-    },
-  })
+  async function runInSandbox(sbx: Awaited<ReturnType<typeof getResearchSandbox>>): Promise<Command> {
+    return sbx.runCommand({
+      cmd: 'node',
+      args: [scriptName],
+      cwd: '/vercel/sandbox',
+      detached: true,
+      env: {
+        ...Object.fromEntries(
+          Object.entries(process.env).filter(([, v]) => v !== undefined)
+        ) as Record<string, string>,
+        SKILL_CONFIG: JSON.stringify(configPayload),
+      },
+    })
+  }
+
+  let cmd: Command
+  try {
+    cmd = await runInSandbox(sandbox)
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('stream was closed') || msg.includes('not accepting commands')) {
+      yield { type: 'agent_text', data: { text: 'Sandbox session expired, creating new session...' } }
+      const freshSandbox = await getResearchSandbox()
+      cmd = await runInSandbox(freshSandbox)
+    } else {
+      throw err
+    }
+  }
 
   let result = ''
   let errorMessage = ''
@@ -184,7 +201,7 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
       break
     }
 
-    const lines = log.data.split('\n').filter(l => l.trim())
+    const lines = log.data.split('\n').filter((l: string) => l.trim())
     for (const line of lines) {
       try {
         const event = JSON.parse(line)
