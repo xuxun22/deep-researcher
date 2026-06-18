@@ -95,61 +95,6 @@ async function main() {
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       disallowedTools: ['Skill', 'Workflow', 'Agent', 'Task', 'Bash', 'WebFetch', 'WebSearch', 'Read', 'Grep', 'Glob', 'Edit', 'Write', 'LS'],
-      outputFormat: {
-        type: 'json_schema',
-        schema: {
-          type: 'object',
-          properties: {
-            queryAnalysis: {
-              type: 'object',
-              properties: {
-                intent: { type: 'string' },
-                language: { type: 'string' },
-                keywords: { type: 'array', items: { type: 'string' } },
-              },
-            },
-            sources: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  url: { type: 'string' },
-                  title: { type: 'string' },
-                  domain: { type: 'string' },
-                  domainScore: { type: 'number' },
-                  passed: { type: 'boolean' },
-                },
-                required: ['url', 'domain', 'domainScore', 'passed'],
-              },
-            },
-            summary: {
-              type: 'object',
-              properties: {
-                executiveSummary: { type: 'string', description: '2-3 sentence concise overview for busy readers' },
-                keyFindings: { type: 'array', items: { type: 'string' }, description: 'List of key discoveries' },
-                detailedAnalysis: { type: 'string', description: 'In-depth analysis with markdown headings' },
-                contradictions: { type: 'string', description: 'Conflicting information across sources' },
-                recommendations: { type: 'array', items: { type: 'string' }, description: 'Actionable recommendations' },
-                critique: { type: 'string', description: 'Self-critique of limitations and biases' },
-                language: { type: 'string' },
-              },
-              required: ['executiveSummary', 'detailedAnalysis', 'language'],
-            },
-            translation: {
-              type: 'object',
-              properties: {
-                translated: { type: 'string' },
-                originalLanguage: { type: 'string' },
-              },
-            },
-            thinkingLog: {
-              type: 'string',
-              description: 'Detailed log of the research process, including planning, search decisions, source evaluation reasoning, synthesis self-critique, and reflections. Minimum 300 characters.',
-            },
-          },
-          required: ['queryAnalysis', 'sources', 'summary', 'thinkingLog'],
-        },
-      },
     },
   });
 
@@ -285,14 +230,20 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
   if (capturedJson) {
     result = capturedJson
   } else if (lastAssistantText) {
-    // Fallback: extract JSON from markdown code blocks
-    const codeBlockMatch = lastAssistantText.match(/```json\s*([\s\S]*?)\s*```/)
-    if (codeBlockMatch) {
-      try {
-        JSON.parse(codeBlockMatch[1])
-        result = codeBlockMatch[1]
-      } catch {
-        // invalid JSON, keep text
+    // Try direct JSON parse first
+    try {
+      JSON.parse(lastAssistantText)
+      result = lastAssistantText
+    } catch {
+      // Fallback: extract JSON from markdown code blocks
+      const codeBlockMatch = lastAssistantText.match(/```json\s*([\s\S]*?)\s*```/)
+      if (codeBlockMatch) {
+        try {
+          JSON.parse(codeBlockMatch[1])
+          result = codeBlockMatch[1]
+        } catch {
+          // invalid JSON, keep text
+        }
       }
     }
   }
@@ -320,8 +271,28 @@ function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   parts.push('1. You MUST use tavily_search tool to search for real-time information.')
   parts.push('2. You MUST evaluate every source with domain_score.')
   parts.push('3. You MUST include ALL searched sources in the "sources" array of your final JSON.')
-  parts.push('4. Output ONLY raw JSON — no markdown code blocks, no ```json tags.')
+  parts.push('4. Output ONLY raw JSON — no markdown code blocks, no ```json tags, no prose before or after.')
   parts.push('5. Ensure the JSON is valid and parseable.')
+  parts.push('6. The "detailedAnalysis" field can contain markdown formatting.')
+  parts.push('7. NEVER wrap your final JSON output in triple backticks.')
+
+  parts.push('\n\n## EXPECTED JSON FORMAT')
+  parts.push('Your final response must be a single JSON object exactly like this:')
+  parts.push(JSON.stringify({
+    queryAnalysis: { intent: '...', language: '...', keywords: ['...'] },
+    sources: [{ url: '...', title: '...', domain: '...', domainScore: 0.9, passed: true }],
+    summary: {
+      executiveSummary: '2-3 sentences...',
+      keyFindings: ['finding 1', 'finding 2'],
+      detailedAnalysis: '## Heading\\nParagraph with **bold**...',
+      contradictions: 'Conflicting info...',
+      recommendations: ['rec 1', 'rec 2'],
+      critique: 'Self-critique...',
+      language: 'zh',
+    },
+    translation: { translated: '...', originalLanguage: 'en' },
+    thinkingLog: 'Research process narrative...',
+  }, null, 2))
 
   return parts.join('\n')
 }
