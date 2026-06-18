@@ -235,15 +235,20 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
       JSON.parse(lastAssistantText)
       result = lastAssistantText
     } catch {
-      // Fallback: extract JSON from markdown code blocks
+      // Fallback 1: extract JSON from markdown code blocks
       const codeBlockMatch = lastAssistantText.match(/```json\s*([\s\S]*?)\s*```/)
       if (codeBlockMatch) {
         try {
           JSON.parse(codeBlockMatch[1])
           result = codeBlockMatch[1]
         } catch {
-          // invalid JSON, keep text
+          // invalid JSON, try brace matching
         }
+      }
+      // Fallback 2: find JSON by matching braces
+      if (!result) {
+        const extracted = extractJsonByBraces(lastAssistantText)
+        if (extracted) result = extracted
       }
     }
   }
@@ -295,4 +300,53 @@ function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   }, null, 2))
 
   return parts.join('\n')
+}
+
+function extractJsonByBraces(text: string): string | null {
+  const startIdx = text.indexOf('{')
+  if (startIdx === -1) return null
+
+  let depth = 0
+  let inString = false
+  let escapeNext = false
+  let endIdx = -1
+
+  for (let i = startIdx; i < text.length; i++) {
+    const ch = text[i]
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    if (ch === '\\') {
+      escapeNext = true
+      continue
+    }
+    if (ch === '"' && !inString) {
+      inString = true
+      continue
+    }
+    if (ch === '"' && inString) {
+      inString = false
+      continue
+    }
+    if (inString) continue
+    if (ch === '{') {
+      depth++
+    } else if (ch === '}') {
+      depth--
+      if (depth === 0) {
+        endIdx = i
+        break
+      }
+    }
+  }
+
+  if (endIdx === -1) return null
+  const candidate = text.slice(startIdx, endIdx + 1)
+  try {
+    JSON.parse(candidate)
+    return candidate
+  } catch {
+    return null
+  }
 }
