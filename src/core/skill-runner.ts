@@ -138,8 +138,12 @@ async function main() {
                 originalLanguage: { type: 'string' },
               },
             },
+            thinkingLog: {
+              type: 'string',
+              description: 'Detailed log of the research process, including planning, search decisions, source evaluation reasoning, synthesis self-critique, and reflections. Minimum 300 characters.',
+            },
           },
-          required: ['queryAnalysis', 'sources', 'summary'],
+          required: ['queryAnalysis', 'sources', 'summary', 'thinkingLog'],
         },
       },
     },

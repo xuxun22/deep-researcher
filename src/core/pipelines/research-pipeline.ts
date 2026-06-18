@@ -79,6 +79,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
       sources?: Array<{ url: string; title: string; domain: string; domainScore: number; passed: boolean }>
       summary?: { overview?: string; detailedAnalysis?: string; language?: string }
       translation?: { translated?: string; originalLanguage?: string }
+      thinkingLog?: string
     } = {}
 
     try {
@@ -161,7 +162,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
       completed_at: new Date().toISOString(),
     })
     yield { type: 'phase', data: { phase: 'complete' } }
-    yield { type: 'result', data: { summary: result, translation: parsedResult.translation?.translated ?? result } }
+    yield { type: 'result', data: { summary: result, translation: parsedResult.translation?.translated ?? result, thinkingLog: parsedResult.thinkingLog ?? '' } }
 
   } catch (err) {
     const message = err instanceof Error

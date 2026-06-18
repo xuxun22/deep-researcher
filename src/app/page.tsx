@@ -66,7 +66,8 @@ export default function Home() {
   const [availableModels, setAvailableModels] = useState<ModelInfo[]>([])
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([])
-  const [finalResult, setFinalResult] = useState<{ summary: string; translation: string; sources: Source[] } | null>(null)
+  const [plan, setPlan] = useState<string>("")
+  const [finalResult, setFinalResult] = useState<{ summary: string; translation: string; sources: Source[]; thinkingLog: string } | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
@@ -161,6 +162,7 @@ export default function Home() {
     if (!query.trim() || !userId.trim() || isStreaming) return
     setIsStreaming(true)
     setStreamEvents([])
+    setPlan("")
     setFinalResult(null)
     try {
       const body: Record<string, string> = { query: query.trim(), userId: userId.trim() }
@@ -173,6 +175,7 @@ export default function Home() {
       let sources: Source[] = []
       let summary = ""
       let translation = ""
+      let thinkingLog = ""
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -185,6 +188,10 @@ export default function Home() {
           try {
             const event: StreamEvent = JSON.parse(trimmed.slice(6))
             setStreamEvents((prev) => [...prev, event])
+            if (event.type === "agent_text" && !plan) {
+              const ad = event.data as { text?: string }
+              if (ad.text && ad.text.length > 20) setPlan(ad.text)
+            }
             if (event.type === "skill_result") {
               const rd = event.data as { result?: string }
               if (rd.result) {
@@ -193,6 +200,7 @@ export default function Home() {
                   if (parsed.sources) sources = parsed.sources
                   if (parsed.summary?.overview) summary = parsed.summary.overview
                   if (parsed.translation?.translated) translation = parsed.translation.translated
+                  if (parsed.thinkingLog) thinkingLog = parsed.thinkingLog
                 } catch {
                   summary = rd.result
                 }
@@ -201,7 +209,7 @@ export default function Home() {
           } catch {}
         }
       }
-      setFinalResult({ summary, translation, sources })
+      setFinalResult({ summary, translation, sources, thinkingLog })
       setTimeout(fetchHistory, 500)
     } catch (err) {
       setStreamEvents((prev) => [...prev, { type: "error", data: { message: err instanceof Error ? err.message : "Unknown error" } }])
@@ -358,6 +366,20 @@ export default function Home() {
           </div>
         </section>
 
+        {plan && (
+          <section className="mb-6">
+            <div className="max-w-3xl mx-auto">
+              <div className="rounded-xl border border-amber-200 bg-amber-50/40 shadow-sm p-5">
+                <h3 className="text-xs font-semibold text-amber-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+                  Research Plan
+                </h3>
+                <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{plan}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {(isStreaming || streamEvents.length > 0) && (
           <section className="mb-10">
             <div className="max-w-3xl mx-auto">
@@ -392,6 +414,15 @@ export default function Home() {
                 <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
                   <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Translation</h3>
                   <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{finalResult.translation}</p>
+                </div>
+              )}
+              {finalResult.thinkingLog && (
+                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3 flex items-center gap-2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
+                    Thinking Log
+                  </h3>
+                  <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-lg p-4 border border-stone-100">{finalResult.thinkingLog}</div>
                 </div>
               )}
               {finalResult.sources.length > 0 && (
