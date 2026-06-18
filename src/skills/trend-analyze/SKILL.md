@@ -9,8 +9,8 @@ description: "基于历史研究记录进行趋势分析和洞察生成。Use wh
 
 ## 工作流程
 
-### 第一步：数据准备
-使用 `query_history` MCP 工具获取历史研究数据，或使用 `reference/` 中的聚合脚本处理数据。
+### 第一步：数据理解
+分析提供给你的历史研究会话数据。每个会话包含：query（查询主题）、intent（意图）、keywords（关键词）、created_at（时间）。
 
 ### 第二步：多维度分析
 
@@ -20,85 +20,53 @@ description: "基于历史研究记录进行趋势分析和洞察生成。Use wh
 - 识别衰退主题（频率下降）
 - 识别稳定主题（持续高频）
 
-#### 2.2 来源质量趋势
-- 分析使用的来源域名分布
-- 跟踪来源质量评分变化
-- 识别新发现的高质量来源
-
-#### 2.3 研究深度趋势
+#### 2.2 研究深度趋势
 - 每次研究的来源数量变化
 - 搜索关键词的复杂度变化
 - 研究主题的广度变化
 
-#### 2.4 观点演变
+#### 2.3 观点演变（如果同一主题有多次研究）
 - 同一主题在不同时间的结论变化
 - 从不确定到确定的转变
 - 新证据对旧结论的影响
 
 ### 第三步：洞察生成
-基于分析结果生成：
-- **关键发现**：最重要的趋势发现
-- **行动建议**：基于趋势的建议
-- **预测**：基于历史模式的前瞻性判断
-
-## 参考资源
-
-- 分析维度详细说明参考 `reference/analysis-dimensions.md`
-- 报告模板参考 `reference/report-templates.md`
-- 可使用 `pattern-finder` 子代理发现数据模式
-- 可使用 `insight-writer` 子代理撰写洞察
+基于分析结果生成结构化报告。
 
 ## 输出格式
 
-返回一个 JSON 对象：
+生成一份 Markdown 格式的趋势分析报告，包含以下部分：
 
-```json
-{
-  "analysisType": "topic | source | timeline | comprehensive",
-  "period": { "from": "2024-01-01", "to": "2024-12-31" },
-  "sessionCount": 42,
-  "trends": {
-    "topicEvolution": [
-      {
-        "topic": "主题名",
-        "mentions": 5,
-        "trend": "rising | stable | declining",
-        "firstSeen": "2024-01-15",
-        "lastSeen": "2024-12-01"
-      }
-    ],
-    "sourceTrends": [
-      {
-        "domain": "域名",
-        "usageCount": 10,
-        "avgScore": 0.85,
-        "trend": "rising | stable | declining"
-      }
-    ],
-    "emergingTopics": [
-      {
-        "topic": "新兴主题",
-        "firstSeen": "2024-11-01",
-        "recentMentions": 3,
-        "relatedTopics": ["相关主题1"]
-      }
-    ]
-  },
-  "insights": [
-    "洞察1：描述...",
-    "洞察2：描述..."
-  ],
-  "summary": "自然语言的趋势总结报告",
-  "recommendations": [
-    "建议1：建议后续研究的方向",
-    "建议2：建议关注的领域"
-  ]
-}
+```markdown
+# Trend Analysis Report
+
+## Overview
+分析概览：时间段、会话数量、分析范围
+
+## Topic Evolution
+### Rising Topics
+- **Topic**: 出现次数, 趋势描述
+
+### Stable Topics
+- **Topic**: 出现次数, 趋势描述
+
+### Declining Topics
+- **Topic**: 出现次数, 趋势描述
+
+### Emerging Topics
+- **Topic**: 首次出现时间, 近期提及次数
+
+## Key Insights
+1. 洞察1
+2. 洞察2
+3. 洞察3
+
+## Recommendations
+- 建议1
+- 建议2
+
+## Thinking Log
+分析过程记录...
 ```
 
-## 注意事项
-
-- 如果历史数据少于 5 条，说明数据量不足以进行有意义的趋势分析
-- 区分"趋势"和"偶然"：至少出现 2 次的模式才算趋势
-- 不要过度解读少量数据
-- 对于定时触发的分析，生成更简洁的报告
+**重要：使用 Markdown 格式输出，不要输出 JSON。**

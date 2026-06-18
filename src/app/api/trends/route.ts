@@ -80,16 +80,13 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      let parsedResult: Record<string, unknown> = {};
-      try { parsedResult = JSON.parse(result); } catch {}
-
       await insertTrendAnalysis({
         user_id: userId,
         analysis_type: analysisType,
         scope_query: query || null,
         session_count: sessions.length,
         input_summary: { period: `${days} days`, sessionCount: sessions.length, scopeQuery: query || 'all' },
-        result: parsedResult as unknown as import('@/lib/db/types').Json,
+        result: result as unknown as import('@/lib/db/types').Json,
       });
 
       close();
