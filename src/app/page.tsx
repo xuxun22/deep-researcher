@@ -413,16 +413,12 @@ export default function Home() {
         )}
 
         <section>
-          <div className="flex items-center justify-between mb-6">
+            <div className="flex items-center justify-between mb-6">
             <h2 className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-stone-900">Research History</h2>
             <div className="flex items-center gap-3">
               <input type="text" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}
                 placeholder="Filter history..."
                 className="text-sm px-3 py-1.5 rounded-md border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 w-48" />
-              <button onClick={() => handleTrendAnalysis()} disabled={isTrending || history.length < 5}
-                className="text-sm px-4 py-1.5 rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {isTrending ? "Analyzing..." : "Global Trend"}
-              </button>
             </div>
           </div>
 
@@ -498,13 +494,18 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => handleTrendAnalysis(selectedTopic)}
-                  disabled={isTrending}
-                  className="text-xs px-3 py-1.5 rounded-md border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-40 transition-colors"
-                >
-                  {isTrending ? "Analyzing..." : "Topic Trend"}
-                </button>
+                {(() => {
+                  const topicCount = history.filter((h) => h.session.query === selectedTopic).length
+                  return topicCount >= 2 ? (
+                    <button
+                      onClick={() => handleTrendAnalysis(selectedTopic)}
+                      disabled={isTrending}
+                      className="text-xs px-3 py-1.5 rounded-md border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-40 transition-colors"
+                    >
+                      {isTrending ? "Analyzing..." : "Topic Trend"}
+                    </button>
+                  ) : null
+                })()}
                 <button onClick={() => { setSelectedTopic(null); setSelectedTopicSession(null) }} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors">
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 6 6 18" /><path d="m6 6 12 12" />

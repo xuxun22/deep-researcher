@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
 
       send({ type: 'phase', data: { phase: 'trend_analysis', sessionCount: sessions.length, scope: query || 'all' } });
 
-      if (sessions.length < 3) {
-        send({ type: 'error', data: { message: `Insufficient data for trend analysis (< 3 sessions for topic "${query || 'all'}")` } });
+      if (sessions.length < 2) {
+        send({ type: 'error', data: { message: `Need at least 2 sessions for trend analysis (topic: "${query || 'all'}")` } });
         close();
         return;
       }
