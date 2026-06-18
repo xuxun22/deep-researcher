@@ -40,14 +40,18 @@ export const config = {
   cron: {
     secret: () => process.env.CRON_SECRET,
   },
-  defaultModel: process.env.ANTHROPIC_MODEL ?? process.env.DEFAULT_MODEL ?? 'claude-sonnet-4-6',
+  defaultModel: process.env.ANTHROPIC_MODEL ?? process.env.DEFAULT_MODEL ?? 'qwen3.7-plus',
   models: [
-    { id: 'claude-opus-4-6', name: 'Claude Opus 4.6', provider: 'anthropic' },
-    { id: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', provider: 'anthropic' },
-    { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic' },
-    { id: 'gpt-4o', name: 'GPT-4o', provider: 'openai' },
-    { id: 'gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai' },
-    { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
+    { id: 'qwen3.7-plus', name: 'Qwen3.7 Plus', provider: 'alibaba' },
+    { id: 'qwen3.6-plus', name: 'Qwen3.6 Plus', provider: 'alibaba' },
+    { id: 'qwen3.5-plus', name: 'Qwen3.5 Plus', provider: 'alibaba' },
+    { id: 'qwen3-max-2026-01-23', name: 'Qwen3 Max 0123', provider: 'alibaba' },
+    { id: 'qwen3-coder-next', name: 'Qwen3 Coder Next', provider: 'alibaba' },
+    { id: 'qwen3-coder-plus', name: 'Qwen3 Coder Plus', provider: 'alibaba' },
+    { id: 'MiniMax-M2.5', name: 'MiniMax M2.5', provider: 'minimax' },
+    { id: 'glm-5', name: 'GLM-5', provider: 'zhipu' },
+    { id: 'glm-4.7', name: 'GLM-4.7', provider: 'zhipu' },
+    { id: 'kimi-k2.5', name: 'Kimi K2.5', provider: 'moonshot' },
   ],
 } as const;
 
