@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import ReactMarkdown from "react-markdown"
+import remarkGfm from "remark-gfm"
 
 interface ResearchSession {
   id: string
@@ -398,8 +400,7 @@ export default function Home() {
                 </div>
                 <div className="p-6">
                   <div className="prose prose-stone prose-sm max-w-none">
-                    {/* Render markdown-like content with basic formatting */}
-                    <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{finalResult.report}</div>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalResult.report}</ReactMarkdown>
                   </div>
                 </div>
               </div>
@@ -495,7 +496,9 @@ export default function Home() {
               {selectedItem.summary && (
                 <div>
                   <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Summary</h4>
-                  <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-lg p-3">{selectedItem.summary.content}</div>
+                  <div className="prose prose-stone prose-sm max-w-none bg-stone-50 rounded-lg p-3">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedItem.summary.content}</ReactMarkdown>
+                  </div>
                 </div>
               )}
               {selectedItem.translation && (
@@ -503,7 +506,9 @@ export default function Home() {
                   <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">
                     Translation {selectedItem.translation.original_language && <span className="text-stone-400 normal-case">({selectedItem.translation.original_language})</span>}
                   </h4>
-                  <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-lg p-3">{selectedItem.translation.translated}</div>
+                  <div className="prose prose-stone prose-sm max-w-none bg-stone-50 rounded-lg p-3">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedItem.translation.translated}</ReactMarkdown>
+                  </div>
                 </div>
               )}
               {selectedItem.sources.length > 0 && (
@@ -552,15 +557,17 @@ export default function Home() {
                 </div>
               )}
               {trendResult && (
-                <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-lg p-4">
-                  {(() => {
-                    try {
-                      const parsed = JSON.parse(trendResult)
-                      return JSON.stringify(parsed, null, 2)
-                    } catch {
-                      return trendResult
-                    }
-                  })()}
+                <div className="prose prose-stone prose-sm max-w-none bg-stone-50 rounded-lg p-4">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {(() => {
+                      try {
+                        const parsed = JSON.parse(trendResult)
+                        return JSON.stringify(parsed, null, 2)
+                      } catch {
+                        return trendResult
+                      }
+                    })()}
+                  </ReactMarkdown>
                 </div>
               )}
               {!isTrending && !trendResult && trendEvents.length > 0 && (
