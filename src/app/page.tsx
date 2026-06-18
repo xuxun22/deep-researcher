@@ -72,6 +72,8 @@ export default function Home() {
   const [finalResult, setFinalResult] = useState<{ report: string; sources: Source[]; thinkingLog: string } | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
+  const [selectedTopic, setSelectedTopic] = useState<string | null>(null)
+  const [selectedTopicSession, setSelectedTopicSession] = useState<HistoryItem | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
   const [isTrendOpen, setIsTrendOpen] = useState(false)
   const [trendEvents, setTrendEvents] = useState<StreamEvent[]>([])
@@ -208,14 +210,16 @@ export default function Home() {
     }
   }
 
-  const handleTrendAnalysis = async () => {
+  const handleTrendAnalysis = async (topicQuery?: string) => {
     if (!userId.trim() || isTrending) return
     setIsTrending(true)
     setTrendEvents([])
     setTrendResult("")
     setIsTrendOpen(true)
     try {
-      const res = await fetch("/api/trends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ userId: userId.trim(), days: 30 }) })
+      const body: Record<string, string | number> = { userId: userId.trim(), days: 30 }
+      if (topicQuery) body.query = topicQuery
+      const res = await fetch("/api/trends", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
       const reader = res.body?.getReader()
       if (!reader) throw new Error("No response body")
       const decoder = new TextDecoder()
@@ -415,9 +419,9 @@ export default function Home() {
               <input type="text" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}
                 placeholder="Filter history..."
                 className="text-sm px-3 py-1.5 rounded-md border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 w-48" />
-              <button onClick={handleTrendAnalysis} disabled={isTrending || history.length < 5}
+              <button onClick={() => handleTrendAnalysis()} disabled={isTrending || history.length < 5}
                 className="text-sm px-4 py-1.5 rounded-md border border-stone-300 bg-white text-stone-700 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-                {isTrending ? "Analyzing..." : "Trend Analysis"}
+                {isTrending ? "Analyzing..." : "Global Trend"}
               </button>
             </div>
           </div>
@@ -440,38 +444,149 @@ export default function Home() {
             </div>
           ) : (
             <div className="grid gap-3">
-              {filteredHistory.map((item) => (
-                <div key={item.session.id} onClick={() => setSelectedItem(item)}
-                  className="group rounded-xl border border-stone-200 bg-white p-4 hover:shadow-md hover:border-stone-300 transition-all cursor-pointer">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-stone-900 truncate mb-1">{item.session.query}</h3>
-                      {item.session.intent && <p className="text-xs text-stone-500 mb-1.5 line-clamp-1">{item.session.intent}</p>}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {(item.session.keywords || []).slice(0, 4).map((k) => (
-                          <span key={k} className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 font-medium">{k}</span>
-                        ))}
-                        <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${item.session.status === "done" ? "bg-teal-50 text-teal-700" : "bg-amber-50 text-amber-700"}`}>
-                          {item.session.status}
-                        </span>
-                        <span className="text-[10px] text-stone-400">{formatDate(item.session.created_at)}</span>
+              {(() => {
+                const topics = new Map<string, HistoryItem[]>()
+                for (const item of filteredHistory) {
+                  const q = item.session.query
+                  if (!topics.has(q)) topics.set(q, [])
+                  topics.get(q)!.push(item)
+                }
+                return Array.from(topics.entries()).map(([topicQuery, items]) => {
+                  const count = items.length
+                  const latest = items[0]
+                  const totalSources = items.reduce((sum, it) => sum + it.sources.length, 0)
+                  return (
+                    <div key={topicQuery} onClick={() => setSelectedTopic(topicQuery)}
+                      className="group rounded-xl border border-stone-200 bg-white p-4 hover:shadow-md hover:border-stone-300 transition-all cursor-pointer">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="text-sm font-semibold text-stone-900 truncate mb-1">{topicQuery}</h3>
+                          {latest.session.intent && <p className="text-xs text-stone-500 mb-1.5 line-clamp-1">{latest.session.intent}</p>}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 font-medium">{count} research{count > 1 ? "es" : ""}</span>
+                            {totalSources > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-stone-100 text-stone-600 font-medium">{totalSources} sources</span>}
+                            <span className="text-[10px] text-stone-400">Last: {formatDate(latest.session.created_at)}</span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 text-stone-400">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="m9 18 6-6-6-6" />
+                          </svg>
+                        </div>
                       </div>
                     </div>
-                    <div className="flex items-center gap-1 text-stone-400">
-                      {item.sources.length > 0 && <span className="text-xs">{item.sources.length} sources</span>}
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  )
+                })
+              })()}
             </div>
           )}
         </section>
       </main>
 
-      {/* Detail Modal */}
+      {/* Topic Detail Modal */}
+      {selectedTopic && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => { setSelectedTopic(null); setSelectedTopicSession(null) }}>
+          <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white border-b border-stone-100 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900">{selectedTopic}</h3>
+                <p className="text-xs text-stone-400 mt-0.5">
+                  {(() => {
+                    const items = history.filter((h) => h.session.query === selectedTopic)
+                    return `${items.length} research${items.length > 1 ? "es" : ""}`
+                  })()}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleTrendAnalysis(selectedTopic)}
+                  disabled={isTrending}
+                  className="text-xs px-3 py-1.5 rounded-md border border-teal-300 bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-40 transition-colors"
+                >
+                  {isTrending ? "Analyzing..." : "Topic Trend"}
+                </button>
+                <button onClick={() => { setSelectedTopic(null); setSelectedTopicSession(null) }} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              {(() => {
+                const topicItems = history.filter((h) => h.session.query === selectedTopic).sort((a, b) => new Date(b.session.created_at).getTime() - new Date(a.session.created_at).getTime())
+                return topicItems.map((item) => (
+                  <div key={item.session.id} className="rounded-lg border border-stone-100 overflow-hidden">
+                    <div
+                      onClick={() => setSelectedTopicSession(selectedTopicSession?.session.id === item.session.id ? null : item)}
+                      className="flex items-center justify-between px-4 py-3 bg-stone-50/50 cursor-pointer hover:bg-stone-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className={`w-2 h-2 rounded-full ${item.session.status === "done" ? "bg-teal-500" : "bg-amber-500"}`} />
+                        <span className="text-xs text-stone-500 font-medium">{formatDate(item.session.created_at)}</span>
+                        <span className="text-xs text-stone-400">{item.session.model || "default"}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-stone-400">
+                        {item.sources.length > 0 && <span className="text-xs">{item.sources.length} sources</span>}
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform ${selectedTopicSession?.session.id === item.session.id ? "rotate-90" : ""}`}>
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                      </div>
+                    </div>
+                    {selectedTopicSession?.session.id === item.session.id && (
+                      <div className="px-4 py-4 space-y-4 border-t border-stone-100">
+                        {item.session.intent && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Intent</h4>
+                            <p className="text-sm text-stone-700">{item.session.intent}</p>
+                          </div>
+                        )}
+                        {item.summary && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Report</h4>
+                            <div className="prose prose-stone prose-sm max-w-none bg-stone-50 rounded-lg p-3">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.summary.content}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                        {item.translation && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-1">Translation</h4>
+                            <div className="prose prose-stone prose-sm max-w-none bg-stone-50 rounded-lg p-3">
+                              <ReactMarkdown remarkPlugins={[remarkGfm]}>{item.translation.translated}</ReactMarkdown>
+                            </div>
+                          </div>
+                        )}
+                        {item.sources.length > 0 && (
+                          <div>
+                            <h4 className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Sources ({item.sources.length})</h4>
+                            <div className="space-y-2">
+                              {item.sources.map((s) => (
+                                <a key={s.id} href={s.url} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-3 p-2.5 rounded-lg border border-stone-100 hover:border-stone-200 hover:bg-stone-50 transition-colors">
+                                  <div className="w-8 h-8 rounded bg-stone-100 flex items-center justify-center text-[10px] font-bold text-stone-500 shrink-0">
+                                    {(s.domain_score * 100).toFixed(0)}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-medium text-stone-900 truncate">{s.title || s.url}</p>
+                                    <p className="text-xs text-stone-400 truncate">{s.domain}</p>
+                                  </div>
+                                </a>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Session Detail Modal */}
       {selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={() => setSelectedItem(null)}>
           <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>

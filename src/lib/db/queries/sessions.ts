@@ -104,6 +104,7 @@ export async function getSessionsForTrendAnalysis(params: {
   user_id: string;
   days?: number;
   limit?: number;
+  query?: string;
 }): Promise<ResearchSession[]> {
   const supabase = getSupabaseClient();
   const days = params.days ?? 30;
@@ -112,7 +113,7 @@ export async function getSessionsForTrendAnalysis(params: {
   const since = new Date();
   since.setDate(since.getDate() - days);
 
-  const { data, error } = await supabase
+  let dbQuery = supabase
     .from('research_sessions')
     .select()
     .eq('user_id', params.user_id)
@@ -120,6 +121,12 @@ export async function getSessionsForTrendAnalysis(params: {
     .gte('created_at', since.toISOString())
     .order('created_at', { ascending: false })
     .limit(limit);
+
+  if (params.query) {
+    dbQuery = dbQuery.eq('query', params.query);
+  }
+
+  const { data, error } = await dbQuery;
 
   if (error) throw error;
   return data ?? [];

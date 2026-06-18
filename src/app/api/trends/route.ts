@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { userId, days = 30, analysisType = 'comprehensive' } = body;
+  const { userId, days = 30, analysisType = 'comprehensive', query } = body;
 
   if (!userId) {
     return Response.json({ error: 'userId is required' }, { status: 400 });
@@ -39,12 +39,12 @@ export async function POST(request: NextRequest) {
 
   (async () => {
     try {
-      const sessions = await getSessionsForTrendAnalysis({ user_id: userId, days, limit: 100 });
+      const sessions = await getSessionsForTrendAnalysis({ user_id: userId, days, limit: 100, query });
 
-      send({ type: 'phase', data: { phase: 'trend_analysis', sessionCount: sessions.length } });
+      send({ type: 'phase', data: { phase: 'trend_analysis', sessionCount: sessions.length, scope: query || 'all' } });
 
-      if (sessions.length < 5) {
-        send({ type: 'error', data: { message: 'Insufficient data for trend analysis (< 5 sessions)' } });
+      if (sessions.length < 3) {
+        send({ type: 'error', data: { message: `Insufficient data for trend analysis (< 3 sessions for topic "${query || 'all'}")` } });
         close();
         return;
       }
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
           })),
           analysisType,
           days,
+          scopeQuery: query || undefined,
         },
         ctx,
         enabledTools: [],
@@ -85,8 +86,9 @@ export async function POST(request: NextRequest) {
       await insertTrendAnalysis({
         user_id: userId,
         analysis_type: analysisType,
+        scope_query: query || null,
         session_count: sessions.length,
-        input_summary: { period: `${days} days`, sessionCount: sessions.length },
+        input_summary: { period: `${days} days`, sessionCount: sessions.length, scopeQuery: query || 'all' },
         result: parsedResult as unknown as import('@/lib/db/types').Json,
       });
 
