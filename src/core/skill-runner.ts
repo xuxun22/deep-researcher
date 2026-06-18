@@ -226,31 +226,9 @@ export async function* runSkill(options: RunSkillOptions): AsyncIterable<SkillEv
     }
   }
 
-  // Prefer captured structured JSON from outputFormat
-  if (capturedJson) {
-    result = capturedJson
-  } else if (lastAssistantText) {
-    // Try direct JSON parse first
-    try {
-      JSON.parse(lastAssistantText)
-      result = lastAssistantText
-    } catch {
-      // Fallback 1: extract JSON from markdown code blocks
-      const codeBlockMatch = lastAssistantText.match(/```json\s*([\s\S]*?)\s*```/)
-      if (codeBlockMatch) {
-        try {
-          JSON.parse(codeBlockMatch[1])
-          result = codeBlockMatch[1]
-        } catch {
-          // invalid JSON, try brace matching
-        }
-      }
-      // Fallback 2: find JSON by matching braces
-      if (!result) {
-        const extracted = extractJsonByBraces(lastAssistantText)
-        if (extracted) result = extracted
-      }
-    }
+  // Use the last assistant message as the result (markdown report)
+  if (lastAssistantText) {
+    result = lastAssistantText
   }
 
   const finished = await cmd.wait()
@@ -275,29 +253,9 @@ function buildSystemPrompt(skill: SkillMeta, ctx: SkillContext): string {
   parts.push('\n\n## CRITICAL RULES')
   parts.push('1. You MUST use tavily_search tool to search for real-time information.')
   parts.push('2. You MUST evaluate every source with domain_score.')
-  parts.push('3. You MUST include ALL searched sources in the "sources" array of your final JSON.')
-  parts.push('4. Output ONLY raw JSON — no markdown code blocks, no ```json tags, no prose before or after.')
-  parts.push('5. Ensure the JSON is valid and parseable.')
-  parts.push('6. The "detailedAnalysis" field can contain markdown formatting.')
-  parts.push('7. NEVER wrap your final JSON output in triple backticks.')
-
-  parts.push('\n\n## EXPECTED JSON FORMAT')
-  parts.push('Your final response must be a single JSON object exactly like this:')
-  parts.push(JSON.stringify({
-    queryAnalysis: { intent: '...', language: '...', keywords: ['...'] },
-    sources: [{ url: '...', title: '...', domain: '...', domainScore: 0.9, passed: true }],
-    summary: {
-      executiveSummary: '2-3 sentences...',
-      keyFindings: ['finding 1', 'finding 2'],
-      detailedAnalysis: '## Heading\\nParagraph with **bold**...',
-      contradictions: 'Conflicting info...',
-      recommendations: ['rec 1', 'rec 2'],
-      critique: 'Self-critique...',
-      language: 'zh',
-    },
-    translation: { translated: '...', originalLanguage: 'en' },
-    thinkingLog: 'Research process narrative...',
-  }, null, 2))
+  parts.push('3. You MUST include ALL searched sources in the Sources section of your report.')
+  parts.push('4. Output a structured Markdown report with the sections defined in the skill instructions.')
+  parts.push('5. Do NOT wrap your entire output in triple backticks.')
 
   return parts.join('\n')
 }
