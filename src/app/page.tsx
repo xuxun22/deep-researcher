@@ -67,7 +67,16 @@ export default function Home() {
   const [isStreaming, setIsStreaming] = useState(false)
   const [streamEvents, setStreamEvents] = useState<StreamEvent[]>([])
   const [plan, setPlan] = useState<string>("")
-  const [finalResult, setFinalResult] = useState<{ summary: string; translation: string; sources: Source[]; thinkingLog: string } | null>(null)
+  interface StructuredSummary {
+    executiveSummary: string
+    keyFindings?: string[]
+    detailedAnalysis: string
+    contradictions?: string
+    recommendations?: string[]
+    critique?: string
+    language: string
+  }
+  const [finalResult, setFinalResult] = useState<{ summary: StructuredSummary; translation: string; sources: Source[]; thinkingLog: string } | null>(null)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null)
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
@@ -173,7 +182,7 @@ export default function Home() {
       const decoder = new TextDecoder()
       let buffer = ""
       let sources: Source[] = []
-      let summary = ""
+      let summary: StructuredSummary | null = null
       let translation = ""
       let thinkingLog = ""
       while (true) {
@@ -198,18 +207,18 @@ export default function Home() {
                 try {
                   const parsed = JSON.parse(rd.result)
                   if (parsed.sources) sources = parsed.sources
-                  if (parsed.summary?.overview) summary = parsed.summary.overview
+                  if (parsed.summary) summary = parsed.summary as StructuredSummary
                   if (parsed.translation?.translated) translation = parsed.translation.translated
                   if (parsed.thinkingLog) thinkingLog = parsed.thinkingLog
                 } catch {
-                  summary = rd.result
+                  summary = { executiveSummary: rd.result, detailedAnalysis: rd.result, language: "zh" }
                 }
               }
             }
           } catch {}
         }
       }
-      setFinalResult({ summary, translation, sources, thinkingLog })
+      if (summary) setFinalResult({ summary, translation, sources, thinkingLog })
       setTimeout(fetchHistory, 500)
     } catch (err) {
       setStreamEvents((prev) => [...prev, { type: "error", data: { message: err instanceof Error ? err.message : "Unknown error" } }])
@@ -404,18 +413,83 @@ export default function Home() {
         {finalResult && (
           <section className="mb-10">
             <div className="max-w-3xl mx-auto space-y-4">
-              {finalResult.summary && (
-                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
-                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Summary</h3>
-                  <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{finalResult.summary}</p>
+              {/* Executive Summary */}
+              {finalResult.summary?.executiveSummary && (
+                <div className="rounded-xl border border-teal-200 bg-teal-50/30 shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-teal-900 mb-3">Executive Summary</h3>
+                  <p className="text-sm text-stone-700 leading-relaxed">{finalResult.summary.executiveSummary}</p>
                 </div>
               )}
+
+              {/* Key Findings */}
+              {finalResult.summary?.keyFindings && finalResult.summary.keyFindings.length > 0 && (
+                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Key Findings</h3>
+                  <ul className="space-y-2">
+                    {finalResult.summary.keyFindings.map((finding, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
+                        <span className="w-5 h-5 rounded-full bg-stone-100 flex items-center justify-center text-xs font-bold text-stone-500 shrink-0 mt-0.5">{i + 1}</span>
+                        <span>{finding}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Detailed Analysis */}
+              {finalResult.summary?.detailedAnalysis && (
+                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Detailed Analysis</h3>
+                  <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{finalResult.summary.detailedAnalysis}</div>
+                </div>
+              )}
+
+              {/* Contradictions */}
+              {finalResult.summary?.contradictions && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/30 shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-amber-900 mb-3 flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+                    Contradictions & Nuances
+                  </h3>
+                  <p className="text-sm text-stone-700 leading-relaxed">{finalResult.summary.contradictions}</p>
+                </div>
+              )}
+
+              {/* Recommendations */}
+              {finalResult.summary?.recommendations && finalResult.summary.recommendations.length > 0 && (
+                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Recommendations</h3>
+                  <ul className="space-y-2">
+                    {finalResult.summary.recommendations.map((rec, i) => (
+                      <li key={i} className="flex items-start gap-2 text-sm text-stone-700">
+                        <span className="w-5 h-5 rounded bg-teal-100 flex items-center justify-center text-xs font-bold text-teal-600 shrink-0 mt-0.5">{i + 1}</span>
+                        <span>{rec}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Self-Critique */}
+              {finalResult.summary?.critique && (
+                <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
+                  <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3 flex items-center gap-2">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+                    Self-Critique
+                  </h3>
+                  <p className="text-sm text-stone-600 leading-relaxed italic">{finalResult.summary.critique}</p>
+                </div>
+              )}
+
+              {/* Translation */}
               {finalResult.translation && (
                 <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
                   <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Translation</h3>
                   <p className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap">{finalResult.translation}</p>
                 </div>
               )}
+
+              {/* Thinking Log */}
               {finalResult.thinkingLog && (
                 <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
                   <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3 flex items-center gap-2">
@@ -425,6 +499,8 @@ export default function Home() {
                   <div className="text-sm text-stone-700 leading-relaxed whitespace-pre-wrap bg-stone-50 rounded-lg p-4 border border-stone-100">{finalResult.thinkingLog}</div>
                 </div>
               )}
+
+              {/* Sources */}
               {finalResult.sources.length > 0 && (
                 <div className="rounded-xl border border-stone-200 bg-white shadow-sm p-5">
                   <h3 className="font-[family-name:var(--font-playfair)] text-lg font-semibold text-stone-900 mb-3">Sources ({finalResult.sources.length})</h3>

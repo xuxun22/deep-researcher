@@ -77,7 +77,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     let parsedResult: {
       queryAnalysis?: { intent?: string; language?: string; keywords?: string[] }
       sources?: Array<{ url: string; title: string; domain: string; domainScore: number; passed: boolean }>
-      summary?: { overview?: string; detailedAnalysis?: string; language?: string }
+      summary?: { executiveSummary?: string; keyFindings?: string[]; detailedAnalysis?: string; contradictions?: string; recommendations?: string[]; critique?: string; language?: string }
       translation?: { translated?: string; originalLanguage?: string }
       thinkingLog?: string
     } = {}
@@ -93,7 +93,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     } catch {
       // If parsing fails, treat the whole result as summary
       parsedResult = {
-        summary: { overview: result, detailedAnalysis: result, language: 'zh' },
+        summary: { executiveSummary: result, detailedAnalysis: result, language: 'zh' },
         translation: { translated: result, originalLanguage: 'zh' },
       }
     }
@@ -138,10 +138,10 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     await updateSessionStatus(session.id, 'analyzing')
 
     // Save summary
-    if (parsedResult.summary?.overview) {
+    if (parsedResult.summary?.executiveSummary) {
       await insertSummary({
         session_id: session.id,
-        content: parsedResult.summary.detailedAnalysis ?? parsedResult.summary.overview,
+        content: parsedResult.summary.detailedAnalysis ?? parsedResult.summary.executiveSummary,
         language: parsedResult.summary.language,
       })
     }
@@ -150,7 +150,7 @@ export async function* executeResearch(input: ResearchInput): AsyncIterable<Rese
     if (parsedResult.translation?.translated) {
       await insertTranslation({
         session_id: session.id,
-        original_text: parsedResult.summary?.overview ?? result,
+        original_text: parsedResult.summary?.executiveSummary ?? result,
         translated: parsedResult.translation.translated,
         original_language: parsedResult.translation.originalLanguage ?? null,
       })

@@ -125,11 +125,15 @@ async function main() {
             summary: {
               type: 'object',
               properties: {
-                overview: { type: 'string' },
-                detailedAnalysis: { type: 'string' },
+                executiveSummary: { type: 'string', description: '2-3 sentence concise overview for busy readers' },
+                keyFindings: { type: 'array', items: { type: 'string' }, description: 'List of key discoveries' },
+                detailedAnalysis: { type: 'string', description: 'In-depth analysis with markdown headings' },
+                contradictions: { type: 'string', description: 'Conflicting information across sources' },
+                recommendations: { type: 'array', items: { type: 'string' }, description: 'Actionable recommendations' },
+                critique: { type: 'string', description: 'Self-critique of limitations and biases' },
                 language: { type: 'string' },
               },
-              required: ['overview', 'language'],
+              required: ['executiveSummary', 'detailedAnalysis', 'language'],
             },
             translation: {
               type: 'object',

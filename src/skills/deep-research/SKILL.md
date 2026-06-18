@@ -89,8 +89,12 @@ description: "执行完整的深度研究流程。Use when 用户提交一个研
     }
   ],
   "summary": {
-    "overview": "简要概述...",
-    "detailedAnalysis": "详细分析...",
+    "executiveSummary": "一段 2-3 句话的精炼概述，让忙碌读者快速了解核心结论。",
+    "keyFindings": ["发现1：核心要点", "发现2：关键数据", "发现3：意外洞察"],
+    "detailedAnalysis": "## 详细分析\n\n### 子主题 A\n深入分析...\n\n### 子主题 B\n深入分析...",
+    "contradictions": "来源中存在矛盾之处：来源 X 认为...但来源 Y 认为...",
+    "recommendations": ["建议1：基于发现应采取的行动", "建议2：进一步研究方向"],
+    "critique": "自我批判：我认为本研究的主要局限是...",
     "language": "zh"
   },
   "translation": {
