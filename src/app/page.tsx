@@ -80,7 +80,6 @@ export default function Home() {
   const [isTrending, setIsTrending] = useState(false)
   const [trendResult, setTrendResult] = useState("")
   const [pastTrends, setPastTrends] = useState<TrendAnalysis[]>([])
-  const [searchFilter, setSearchFilter] = useState("")
   const streamEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -251,14 +250,6 @@ export default function Home() {
     }
   }
 
-  const filteredHistory = history.filter((item) => {
-    const q = item.session.query.toLowerCase()
-    const intent = (item.session.intent || "").toLowerCase()
-    const keywords = (item.session.keywords || []).join(" ").toLowerCase()
-    const f = searchFilter.toLowerCase()
-    return q.includes(f) || intent.includes(f) || keywords.includes(f)
-  })
-
   const formatDate = (iso: string) => {
     const d = new Date(iso)
     return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })
@@ -415,11 +406,6 @@ export default function Home() {
         <section>
             <div className="flex items-center justify-between mb-6">
             <h2 className="font-[family-name:var(--font-playfair)] text-2xl font-medium text-stone-900">Research History</h2>
-            <div className="flex items-center gap-3">
-              <input type="text" value={searchFilter} onChange={(e) => setSearchFilter(e.target.value)}
-                placeholder="Filter history..."
-                className="text-sm px-3 py-1.5 rounded-md border border-stone-200 bg-white focus:outline-none focus:ring-2 focus:ring-stone-400 w-48" />
-            </div>
           </div>
 
           {pastTrends.length > 0 && (
@@ -434,15 +420,15 @@ export default function Home() {
 
           {isLoadingHistory ? (
             <div className="text-center py-12 text-stone-400 text-sm">Loading history...</div>
-          ) : filteredHistory.length === 0 ? (
+          ) : history.length === 0 ? (
             <div className="text-center py-12 text-stone-400 text-sm">
-              {searchFilter ? "No matches found." : "No research history yet. Submit your first query above."}
+              No research history yet. Submit your first query above.
             </div>
           ) : (
             <div className="grid gap-3">
               {(() => {
                 const topics = new Map<string, HistoryItem[]>()
-                for (const item of filteredHistory) {
+                for (const item of history) {
                   const q = item.session.query
                   if (!topics.has(q)) topics.set(q, [])
                   topics.get(q)!.push(item)
